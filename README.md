@@ -5,6 +5,9 @@ Escape from Tarkov 플레이 환경을 위한 **Windows 모니터 감마 및 디
 감마·밝기·대비 등의 디스플레이 설정을 프로필로 저장하고, 게임 자동 적용이나 단축키를 이용해 빠르게 전환할 수 있습니다.
 
 > ⚠️ 이 프로그램은 Battlestate Games 또는 Escape from Tarkov의 공식 프로그램이 아닙니다.
+>
+> ![Uploading image.png…]()
+
 
 ## ✨ v1.4.3 주요 변경사항
 
