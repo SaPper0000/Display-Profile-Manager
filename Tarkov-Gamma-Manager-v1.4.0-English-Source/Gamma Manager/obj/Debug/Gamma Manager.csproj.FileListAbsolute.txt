@@ -1,0 +1,10 @@
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\bin\Tarkov Gamma manager v1.4.exe.config
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\bin\Tarkov Gamma manager v1.4.exe
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\bin\Tarkov Gamma manager v1.4.pdb
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\obj\Debug\Gamma Manager.csproj.AssemblyReference.cache
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\obj\Debug\Gamma_Manager.Window.resources
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\obj\Debug\Gamma_Manager.Properties.Resources.resources
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\obj\Debug\Gamma Manager.csproj.GenerateResource.cache
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\obj\Debug\Gamma Manager.csproj.CoreCompileInputs.cache
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\obj\Debug\Tarkov Gamma manager v1.4.exe
+C:\Users\SM\Desktop\새 폴더 (12)\Tarkov-Gamma-Manager-v1.4.0-Korean-English\Tarkov-Gamma-Manager-v1.4.0-English-Source\Gamma Manager\obj\Debug\Tarkov Gamma manager v1.4.pdb
