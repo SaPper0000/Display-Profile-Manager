@@ -1,84 +1,131 @@
-# Tarkov Gamma Manager v1.4
+# Tarkov Gamma Manager
 
-Windows monitor gamma / display profile manager designed for use with Escape from Tarkov.
+Escape from Tarkov 플레이 환경에서 모니터 감마, 밝기, 대비 및
+디스플레이 프로필을 편리하게 관리할 수 있는 Windows 프로그램입니다.
 
-> **Important:** This project is a Windows utility for changing monitor/display settings. It does not intentionally modify Tarkov files or access Tarkov process memory.
+게임 자동 프로필과 단축키를 이용하여 게임 상황에 맞는 화면 설정을
+빠르게 적용할 수 있습니다.
 
-## Features
+## ✨ 주요 기능
 
-- Per-monitor display profiles
-- Automatic default profiles for detected monitors
-- Game Auto profile assignment
-- Global hotkeys
-- Hotkey **Apply / Toggle** modes
-- Profile backup and restore
-- Monitor control can be disabled by default
-- Korean and English UI variants
-- Portable operation (no installer required)
+### 🎮 게임 자동
 
-## Hotkey Toggle
+지정한 게임이 실행되면 설정해 둔 프로필을 자동으로 적용합니다.
 
-A profile hotkey can be configured as either:
+예시:
 
-- **Apply** — activates the selected profile.
-- **Toggle** — activates the selected profile on the first press, then returns to the profile that was active immediately before the toggle on the next press.
+게임 실행
+→ A 프로필 자동 적용
 
-Example:
+게임 종료
+→ 이전 모니터 설정 복구
+
+### 🎛️ 디스플레이 프로필
+
+모니터별로 감마 및 디스플레이 설정을 프로필로 저장하고
+필요할 때 빠르게 불러올 수 있습니다.
+
+여러 대의 모니터를 사용하는 환경에서도 모니터별 기본 설정을 관리할 수 있습니다.
+
+### ⌨️ 핫키
+
+프로필마다 원하는 단축키를 지정할 수 있습니다.
+
+#### 적용
+
+단축키를 누르면 해당 프로필을 적용합니다.
+
+#### 토글
+
+단축키를 누르면 해당 프로필을 적용하고,
+같은 단축키를 다시 누르면 이전에 사용하던 프로필로 돌아갑니다.
+
+예:
+
+게임 자동 → A 프로필
+
+B 프로필 → F11 / 토글
+
+게임 실행
+→ A 프로필
+
+F11
+→ B 프로필
+
+F11
+→ A 프로필 복귀
+
+### 💾 백업 / 복원
+
+저장된 프로필과 프로그램 설정을 백업 파일로 저장할 수 있습니다.
+
+프로그램을 업데이트하기 전에 설정을 백업해 두면
+새 버전에서도 기존 설정을 복원할 수 있습니다.
+
+복원 전에 현재 설정을 자동으로 백업하여
+기존 설정이 손실되는 것을 방지합니다.
+
+### 🖥️ 모니터 조절
+
+모니터 밝기 및 대비 조절 기능을 제공합니다.
+
+모니터 조절 기능은 기본적으로 꺼져 있으며,
+`모니터 조절 사용`을 활성화한 경우에만 관련 설정을 변경할 수 있습니다.
+
+### 🌐 한국어 / 영어
+
+한국어와 영어 UI를 제공합니다.
+
+---
+
+## 🔒 안티치트 관련
+
+이 프로그램은 게임 내부 데이터를 수정하거나
+게임 메모리에 접근하기 위한 프로그램이 아닙니다.
+
+다음과 같은 기능을 사용하지 않습니다.
+
+- 게임 메모리 읽기 / 쓰기
+- DLL Injection
+- 게임 DLL Hooking
+- 커널 드라이버
+- 게임 파일 수정
+- 패킷 조작
+- 게임 메모리 스캔
+- 게임 내부 오버레이
+
+게임 자동 기능은 게임 프로세스의 실행 여부를 확인하고
+설정된 프로필을 적용하는 용도로 사용됩니다.
+
+단, Escape from Tarkov 및 BattlEye의 정책과 탐지 방식은
+언제든 변경될 수 있으므로 프로그램 사용으로 인한
+게임 이용 제한을 보증하지 않습니다.
+
+---
+
+## 📦 설치 방법
+
+별도의 설치 과정 없이 사용할 수 있습니다.
+
+1. GitHub Releases에서 원하는 버전의 ZIP 파일을 다운로드합니다.
+2. ZIP 파일의 압축을 해제합니다.
+3. `Tarkov Gamma Manager v1.4.exe`를 실행합니다.
+
+---
+
+## 💾 설정 백업
+
+새로운 버전으로 업데이트하기 전에
+프로그램의 `백업` 기능을 사용하는 것을 권장합니다.
+
+문제가 발생할 경우 `불러오기` 기능을 이용하여
+기존 설정을 복원할 수 있습니다.
+
+---
+
+## 🛠️ 직접 빌드하기
+
+이 프로젝트는 Visual Studio에서 솔루션을 열어 직접 빌드할 수 있습니다.
 
 ```text
-Game Auto -> Profile A
-B profile -> F11 / Toggle
-
-Game starts -> A
-F11        -> B
-F11 again  -> A
-```
-
-## Backup / Restore
-
-The profile manager includes full settings backup and restore. Backups use the application's INI format and can be retained before future upgrades.
-
-Before restoring, the application creates a safety copy of the current settings.
-
-## Build
-
-Requirements:
-
-- Windows
-- Visual Studio 2022 (or a compatible Visual Studio version)
-- .NET Framework 4.7.2 targeting/development tools
-
-Open `Tarkov-Gamma-Manager-v1.4.sln` and select **Release** configuration, then use **Build > Rebuild Solution**.
-
-See `BUILD-INSTRUCTIONS-KR.md` for Korean build notes.
-
-## Release distribution
-
-For normal users, use the ZIP files attached to the GitHub Release. The repository itself contains the source and Visual Studio solution so that the project can be inspected and rebuilt independently.
-
-## Security / anti-cheat scope
-
-This project is intended as a display utility. The source does not intentionally implement:
-
-- Tarkov process-memory reading/writing
-- DLL injection into the game
-- kernel drivers
-- game file modification
-- packet manipulation
-- input injection for gameplay automation
-
-This is a technical description, not a guarantee that a third-party anti-cheat will never flag any future version. Users should review the source and use the software at their own discretion.
-
-## Provenance and licensing
-
-The project was developed by modifying and extending the previously published **Gamma Manager** project. The original project was released under the **CC0 1.0 Universal** dedication, which is retained in `LICENSE.txt`.
-
-The current repository contains substantial modifications and additional features. See `CHANGELOG.md` for the v1.4 changes maintained in this fork.
-
-## Development assistance
-
-Parts of the project were developed and refactored with assistance from OpenAI's ChatGPT.
-
-## Disclaimer
-
-Use the software at your own risk. The authors are not responsible for display configuration problems, data loss, game issues, or third-party anti-cheat decisions resulting from use of the software.
+Tarkov-Gamma-Manager-v1.4.sln
