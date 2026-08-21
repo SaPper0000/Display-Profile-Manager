@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/31291320/README.md)
+
 # Tarkov Gamma Manager
 
 **Escape from Tarkov 플레이 환경을 위한 Windows 디스플레이 프로필 관리 프로그램**
