@@ -1,6 +1,10 @@
 # Tarkov Gamma Manager v1.4.6
 
-![Uploading 스크린샷 2026-08-22 205010.png…]()
+
+
+
+<img width="1076" height="712" alt="스크린샷 2026-08-22 205010" src="https://github.com/user-attachments/assets/c19117d5-ef22-4ce6-90e0-254b8471a5a3" />
+
 
 
 
