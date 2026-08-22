@@ -1,10 +1,3 @@
-
-
-
-
-
-![Uploading 스크린샷 2026-08-22 145843.png…]()
-
 # Tarkov Gamma Manager v1.4.4
 
 Escape from Tarkov 플레이 환경을 위한 **Windows 모니터 감마 및 디스플레이 프로필 관리 프로그램**입니다.
@@ -12,6 +5,9 @@ Escape from Tarkov 플레이 환경을 위한 **Windows 모니터 감마 및 디
 감마·밝기·대비 등의 디스플레이 설정을 프로필로 저장하고, 게임 자동 적용이나 단축키를 이용해 빠르게 전환할 수 있습니다.
 
 > ⚠️ 이 프로그램은 Battlestate Games 또는 Escape from Tarkov의 공식 프로그램이 아닙니다.
+
+<img width="1026" height="623" alt="스크린샷 2026-08-22 145843" src="https://github.com/user-attachments/assets/7eee92a1-4977-4858-8de1-08540465b7bf" />
+
 
 ## ✨ v1.4.4 주요 변경사항
 
