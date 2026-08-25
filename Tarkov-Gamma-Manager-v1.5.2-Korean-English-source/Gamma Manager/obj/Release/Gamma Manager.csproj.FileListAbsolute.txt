@@ -1,0 +1,10 @@
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\Tarkov-Gamma-Manager-v1.5.2-Korean-English\Tarkov-Gamma-Manager-v1.5.2-Korean-English.exe.config
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\Tarkov-Gamma-Manager-v1.5.2-Korean-English\Tarkov-Gamma-Manager-v1.5.2-Korean-English.exe
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\Tarkov-Gamma-Manager-v1.5.2-Korean-English\Tarkov-Gamma-Manager-v1.5.2-Korean-English.pdb
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\obj\Release\Gamma Manager.csproj.AssemblyReference.cache
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\obj\Release\Gamma_Manager.Window.resources
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\obj\Release\Gamma_Manager.Properties.Resources.resources
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\obj\Release\Gamma Manager.csproj.GenerateResource.cache
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\obj\Release\Gamma Manager.csproj.CoreCompileInputs.cache
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\obj\Release\Tarkov-Gamma-Manager-v1.5.2-Korean-English.exe
+F:\원본\1.5.2 - FINAL\Tarkov-Gamma-Manager-v1.5.2-Korean-English-source\Gamma Manager\obj\Release\Tarkov-Gamma-Manager-v1.5.2-Korean-English.pdb
