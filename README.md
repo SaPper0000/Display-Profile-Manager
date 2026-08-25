@@ -1,5 +1,9 @@
 Tarkov Gamma Manager v1.5.2
 
+
+<img width="1086" height="753" alt="스크린샷 2026-08-26 042636" src="https://github.com/user-attachments/assets/2bd02956-f7e1-4e27-a0ce-889425a190da" />
+
+
 ⚠️ 관리자 권한 실행
 
 게임을 실행한 상태에서 글로벌 핫키를 사용하려면 프로그램을 관리자 권한으로 실행해야 합니다.
