@@ -1,5 +1,8 @@
-Markdown
 # Tarkov Gamma Manager v1.5.1
+
+
+<img width="1086" height="753" alt="image" src="https://github.com/user-attachments/assets/7b4aa65f-c151-4c35-8175-048abed86d7d" />
+
 
 > ## ⚠️ 관리자 권한 실행
 >
