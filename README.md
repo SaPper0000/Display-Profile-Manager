@@ -135,11 +135,11 @@ v1.5.2는 **사용자 피드백으로 제보된 슬라이더 미반영 및 프�
 | 구버전 INI 자동 마이그레이션 | ✅ |
 | 한국어 / English UI 지원 | ✅ |
 
-📜 Credits & License
-원본 프로젝트: Gamma-Manager (KrasnovM)
+---
 
-팬아트 일러스트: automatic8 (Reddit 4K Killa & Tagilla Wallpaper)
+## 📜 Credits & License
 
-라이선스: CC0 1.0 Universal (LICENSE.txt)
-
-GitHub 저장소: SaPper0000/Tarkov-Gamma-Manager
+* **원본 프로젝트:** [Gamma-Manager (KrasnovM)](https://github.com/KrasnovM/Gamma-Manager)
+* **팬아트 일러스트:** automatic8 ([Reddit 4K Killa & Tagilla Wallpaper](https://www.reddit.com/r/EscapefromTarkov/comments/1hqmrm6/4k_killa_tagilla_wallpaper/))
+* **라이선스:** CC0 1.0 Universal ([LICENSE.txt](LICENSE.txt))
+* **GitHub 저장소:** [SaPper0000/Tarkov-Gamma-Manager](https://github.com/SaPper0000/Tarkov-Gamma-Manager)
