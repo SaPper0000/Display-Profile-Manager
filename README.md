@@ -132,8 +132,12 @@ Cycle: 지정된 프로필들을 순서대로 순환하며 적용.
 ├─ state\  (GammaManager.StartupBackup.json 원본 상태 백업)
 ├─ logs\   (TarkovGammaManager-YYYY-MM-DD.log)
 └─ backup\ (수동 프로필 백업)
+```
+
 프로그램 우측 패널의 📁 설정 / 로그 폴더 열기 버튼을 누르면 해당 경로가 바로 열립니다.
+
 ## 📋 지원 기능 요약
+
 | 기능 | 지원 여부 |
 |---|:---:|
 | Gamma / Brightness / Contrast 조절 | ✅ |
@@ -152,7 +156,7 @@ Cycle: 지정된 프로필들을 순서대로 순환하며 적용.
 | 설정 및 로그 폴더 원클릭 열기 (📁) | ✅ |
 | 구버전 INI 자동 마이그레이션 | ✅ |
 | 한국어 / English UI 지원 | ✅ |
-```
+
 
 ## 📜 Credits & License
 
