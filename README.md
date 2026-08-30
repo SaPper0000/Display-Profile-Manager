@@ -3,6 +3,12 @@
 <!-- ================================================================= -->
 # 🖥️ Display Profile Manager v1.5.3
 
+<img width="1082" height="752" alt="image" src="https://github.com/user-attachments/assets/b724d20c-96de-4df4-a5bb-19f305e83682" />
+
+<img width="1082" height="752" alt="image" src="https://github.com/user-attachments/assets/2de6512d-cfd4-4293-af1e-0351e4b460f9" />
+
+
+
 > Windows용 모니터별 디스플레이 프로필 및 색상 설정 관리 도구
 
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](#)
