@@ -3,7 +3,7 @@
 <!-- ================================================================= -->
 # 🖥️ Display Profile Manager v1.5.3-2
 
-<img width="1082" height="752" alt="image" src="https://github.com/user-attachments/assets/5953b4ca-a9a3-47bd-92ec-62c34a986976" />
+<img width="1082" height="752" alt="image" src="https://github.com/user-attachments/assets/1a9d9182-5b10-40c0-8342-c75cf1041119" />
 
 
 > Windows용 모니터별 디스플레이 프로필, 게임 자동 감지 및 색상 설정 관리 도구
