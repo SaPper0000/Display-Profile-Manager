@@ -3,9 +3,6 @@
 <!-- ================================================================= -->
 # 🖥️ Display Profile Manager v1.5.3-2
 
-<img width="1082" height="752" alt="image" src="https://github.com/user-attachments/assets/08c6b752-f1b1-4bfc-a5be-92c598a15420" />
-
-
 > Windows용 모니터별 디스플레이 프로필, 게임 자동 감지 및 색상 설정 관리 도구
 
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](#)
@@ -43,7 +40,7 @@ Display Profile Manager는 감마, 밝기, 대비, RGB 색상, 채도 같은 화
 - **창 항상 위로 & 내리기/숨기기 동작 분리:**
   - `창을 맨위로` **체크 ON**: 항상 최상단 표시(`TopMost = true`), 버튼이 `숨기기`로 표시되며 클릭 시 **알림 영역(시스템 트레이)으로 숨김** 처리됩니다.
   - `창을 맨위로` **체크 OFF**: 일반 창(`TopMost = false`)으로 동작, 버튼이 `내리기`로 표시되며 클릭 시 알림 영역 대신 **Windows 작업표시줄로 안전하게 최소화**됩니다.
-  - 기존 `Window_Resize` 이벤트에서 무조건 `Hide()`를 호출하던 버그를 해결하여 작업표시줄 최소화 동작을 복원 원했습니다.
+  - 기존 `Window_Resize` 이벤트에서 무조건 `Hide()`를 호출하던 버그를 해결하여 작업표시줄 최소화 동작을 완벽히 복원했습니다.
 - **동일 모델 다중 모니터 고유 EDID 시리얼 넘버 1:1 매칭:**
   - `MonitorIdentity.Read()`에서 동일 모델 모니터의 레지스트리 인스턴스를 탐색할 때, 장치의 `hardwareId`에 일치하는 서브키를 우선 탐색하여 **각 모니터의 실제 고유 EDID Serial을 정확히 추출**하도록 개선했습니다. (PC 재부팅/절전모드 복귀 시 프로필 뒤바뀜 원천 방지)
 - **동일 모델 다중 모니터 프로필 콤보박스 및 게임 자동 매칭 분리:**
