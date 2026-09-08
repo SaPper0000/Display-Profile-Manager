@@ -3,6 +3,10 @@
 <!-- ================================================================= -->
 # 🖥️ Display Profile Manager v1.5.5
 
+<img width="1082" height="752" alt="image" src="https://github.com/user-attachments/assets/4657694e-5a72-4363-b311-4703aeb24ec2" />
+
+
+
 > Windows용 모니터별 디스플레이 프로필, 게임 자동 감지, 즉시 볼륨 전환, 동영상 프로필 필터 및 색상 설정 관리 도구
 
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](#)
