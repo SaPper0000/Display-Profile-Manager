@@ -57,6 +57,7 @@ namespace Gamma_Manager
                 if (fileLength >= MaxFileSizeBytes)
                 {
                     selectedPath = Path.Combine(LogDirectory, $"{baseName}_{MaxDailyLogFiles - 1}.log");
+                    bool found = false;
                     for (int index = 1; index < MaxDailyLogFiles; index++)
                     {
                         string indexedPath = Path.Combine(LogDirectory, $"{baseName}_{index}.log");
@@ -64,6 +65,7 @@ namespace Gamma_Manager
                         {
                             selectedPath = indexedPath;
                             fileLength = 0;
+                            found = true;
                             break;
                         }
                         long len = new FileInfo(indexedPath).Length;
@@ -71,8 +73,13 @@ namespace Gamma_Manager
                         {
                             selectedPath = indexedPath;
                             fileLength = len;
+                            found = true;
                             break;
                         }
+                    }
+                    if (!found)
+                    {
+                        fileLength = File.Exists(selectedPath) ? new FileInfo(selectedPath).Length : 0;
                     }
                 }
             }
@@ -186,7 +193,7 @@ namespace Gamma_Manager
             return value.ToString();
         }
 
-        [System.Runtime.InteropServices.DllImport("kernel32", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        [System.Runtime.InteropServices.DllImport("kernel32", EntryPoint = "GetPrivateProfileStringW", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
         private static extern int NativeGetPrivateProfileString(string section, string key, string defaultValue, StringBuilder returnedString, int size, string filePath);
     }
 }

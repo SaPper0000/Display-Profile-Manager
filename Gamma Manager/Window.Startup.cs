@@ -145,6 +145,33 @@ namespace Gamma_Manager
             });
             contextMenu.Items.Add(toolVolumeDuck);
 
+            // [추가] 화면 필터 스크린샷 캡처 및 설정 메뉴
+            ToolStripMenuItem toolScreenshot = new ToolStripMenuItem(LanguageManager.Korean ? "📸 필터 스크린샷 캡처" : "📸 Capture Filtered Screenshot", null, (s, e) =>
+            {
+                ScreenshotManager.Capture(this, iniFile, displays, currDisplay);
+            });
+            contextMenu.Items.Add(toolScreenshot);
+
+            ToolStripMenuItem toolScreenshotSettings = new ToolStripMenuItem(LanguageManager.Korean ? "📸 필터 스크린샷 설정..." : "📸 Screenshot Settings...", null, (s, e) =>
+            {
+                SuspendGlobalHotkeys();
+                try
+                {
+                    using (ScreenshotSettingsForm scForm = new ScreenshotSettingsForm(iniFile, this, displays, currDisplay))
+                    {
+                        if (scForm.ShowDialog(this) == DialogResult.OK)
+                        {
+                            UpdateScreenshotButtonState();
+                        }
+                    }
+                }
+                finally
+                {
+                    ResumeGlobalHotkeys();
+                }
+            });
+            contextMenu.Items.Add(toolScreenshotSettings);
+
             ToolStripSeparator toolStripSeparator1 = new ToolStripSeparator();
             contextMenu.Items.Add(toolStripSeparator1);
 
@@ -449,6 +476,113 @@ namespace Gamma_Manager
             int TaskBarHeight = tmp - Screen.PrimaryScreen.WorkingArea.Height;
 
             Location = new Point(screenWidth - windowWidth, screenHeight - (windowHeight + TaskBarHeight));
+        }
+
+        private void CheckDefaultMismatchOnStartup(bool hadAbnormalCrash)
+        {
+            if (hadAbnormalCrash) return;
+            if (displays == null || displays.Count == 0) return;
+
+            string checkSetting = iniFile.Read("CheckDefaultMismatchOnStartup", "Settings");
+            if (string.Equals(checkSetting, "false", StringComparison.OrdinalIgnoreCase)) return;
+
+            bool ko = LanguageManager.Korean;
+
+            foreach (Display.DisplayInfo display in displays)
+            {
+                if (display == null) continue;
+                string defPreset = GetDefaultProfileName(display);
+                if (string.IsNullOrEmpty(defPreset) || string.IsNullOrEmpty(iniFile.Read("monitor", defPreset)))
+                    continue;
+
+                // INI에 저장되어 있던 기존 기본값 읽기
+                int iniB = int.TryParse(iniFile.Read("monitorBrightness", defPreset), out int b) ? b : -1;
+                int iniC = int.TryParse(iniFile.Read("monitorContrast", defPreset), out int c) ? c : -1;
+                int iniSat = int.TryParse(iniFile.Read("saturation", defPreset), out int s) ? s : -1;
+
+                // 방금 시작 시 실측된 하드웨어 값 읽기
+                int realB = -1, realC = -1, realSat = -1;
+                bool hasRealHardware = StartupStateManager.TryGetOriginalValues(display.displayLink, out realB, out realC);
+                bool hasRealSat = StartupStateManager.TryGetOriginalSaturation(display.displayLink, out realSat);
+
+                List<string> diffs = new List<string>();
+
+                // 1. 모니터 대비 (외부 모니터 DDC/CI)
+                if (display.isExternal && hasRealHardware && iniC >= 0 && realC >= 0 && realC != iniC)
+                {
+                    diffs.Add(ko ? $"명암 (대비): {iniC}  ➔  {realC}" : $"Contrast: {iniC}  ➔  {realC}");
+                }
+
+                // 2. 모니터 밝기
+                if (display.isExternal && hasRealHardware && iniB >= 0 && realB >= 0 && realB != iniB)
+                {
+                    diffs.Add(ko ? $"화면 밝기: {iniB}  ➔  {realB}" : $"Brightness: {iniB}  ➔  {realB}");
+                }
+
+                // 3. 디지털 바이브런스 / 채도
+                if (display.saturationSupported && hasRealSat && iniSat >= 0 && realSat >= 0 && realSat != iniSat)
+                {
+                    string satTitle = display.adapterVendor == WinApi.DisplayAdapterVendor.Nvidia
+                        ? (ko ? "디지털 바이브런스" : "Digital Vibrance")
+                        : (ko ? "채도" : "Saturation");
+                    diffs.Add($"{satTitle}: {iniSat}%  ➔  {realSat}%");
+                }
+
+                if (diffs.Count == 0) continue;
+
+                // 차이 감지 팝업 노출
+                using (DefaultMismatchForm form = new DefaultMismatchForm(display.displayName, diffs))
+                {
+                    form.ShowDialog(this);
+                    if (form.SelectedChoice == DefaultMismatchForm.Choice.ApplyNewDefault)
+                    {
+                        // 1. 새 기본값으로 저장
+                        if (display.isExternal && realC >= 0)
+                        {
+                            display.monitorContrast = realC;
+                            iniFile.Write("monitorContrast", realC.ToString(System.Globalization.CultureInfo.InvariantCulture), defPreset);
+                        }
+                        if (display.isExternal && realB >= 0)
+                        {
+                            display.monitorBrightness = realB;
+                            iniFile.Write("monitorBrightness", realB.ToString(System.Globalization.CultureInfo.InvariantCulture), defPreset);
+                        }
+                        if (display.saturationSupported && realSat >= 0)
+                        {
+                            int clampedSat = Clamp(realSat, display.saturationMin, display.saturationMax);
+                            display.saturation = clampedSat;
+                            display.saturationDefault = clampedSat;
+                            iniFile.Write("saturation", clampedSat.ToString(System.Globalization.CultureInfo.InvariantCulture), defPreset);
+                        }
+                        iniFile.Flush();
+
+                        StartupStateManager.Capture(displays);
+
+                        if (currDisplay != null && string.Equals(display.displayLink, currDisplay.displayLink, StringComparison.OrdinalIgnoreCase))
+                        {
+                            fillInfo(currDisplay);
+                        }
+
+                        if (IsOSDEnabled())
+                            OSDForm.ShowMessage(display.displayLink, ko ? "💾 기본값 갱신됨" : "💾 Default Updated");
+                    }
+                    else if (form.SelectedChoice == DefaultMismatchForm.Choice.RestoreSavedDefault)
+                    {
+                        // 2. 기존 기본값으로 복원
+                        ResetMonitorHard(display);
+                        StartupStateManager.Capture(displays);
+
+                        if (currDisplay != null && string.Equals(display.displayLink, currDisplay.displayLink, StringComparison.OrdinalIgnoreCase))
+                        {
+                            fillInfo(currDisplay);
+                        }
+
+                        if (IsOSDEnabled())
+                            OSDForm.ShowMessage(display.displayLink, ko ? "🔄 기본값 복원됨" : "🔄 Default Restored");
+                    }
+                    // 3. KeepCurrent: 화면 현재 상태 유지 (기본값 변경 안 함)
+                }
+            }
         }
     }
 }

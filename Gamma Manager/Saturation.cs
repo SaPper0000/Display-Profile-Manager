@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Gamma_Manager
 {
@@ -96,6 +97,7 @@ namespace Gamma_Manager
         private static bool adlReady;
 
         private static volatile bool isShuttingDown = false;
+        private static readonly ReaderWriterLockSlim _lifecycleLock = new ReaderWriterLockSlim();
 
         private sealed class Binding
         {
@@ -146,10 +148,10 @@ namespace Gamma_Manager
                     {
                         if (PrepareNvidia(display, out b))
                         {
-                            lock (_globalInitLock) { bindings[linkKey] = b; }
                             int current, def, min, max, step;
                             if (GetNvidia(b, out current, out def, out min, out max, out step))
                             {
+                                lock (_globalInitLock) { bindings[linkKey] = b; }
                                 SetDisplayRange(display, current, def, min, max, step);
                                 lock (_globalInitLock)
                                 {
@@ -164,10 +166,10 @@ namespace Gamma_Manager
                     {
                         if (PrepareAmd(display, out b))
                         {
-                            lock (_globalInitLock) { bindings[linkKey] = b; }
                             int current, def, min, max, step;
                             if (GetAmd(b, out current, out def, out min, out max, out step))
                             {
+                                lock (_globalInitLock) { bindings[linkKey] = b; }
                                 SetDisplayRange(display, current, def, min, max, step);
                                 lock (_globalInitLock)
                                 {
@@ -202,40 +204,49 @@ namespace Gamma_Manager
         public static bool Apply(Display.DisplayInfo display, int value)
         {
             if (display == null || isShuttingDown) return false;
-            if (!Prepare(display)) return false;
-
-            value = Math.Max(display.saturationMin, Math.Min(display.saturationMax, value));
-            string linkKey = display.displayLink ?? string.Empty;
-
-            object adapterLock = GetLockForDisplay(display);
-            lock (adapterLock)
+            if (!_lifecycleLock.TryEnterReadLock(1000)) return false;
+            try
             {
                 if (isShuttingDown) return false;
+                if (!Prepare(display)) return false;
 
-                Binding b;
-                lock (_globalInitLock)
+                value = Math.Max(display.saturationMin, Math.Min(display.saturationMax, value));
+                string linkKey = display.displayLink ?? string.Empty;
+
+                object adapterLock = GetLockForDisplay(display);
+                lock (adapterLock)
                 {
-                    if (!bindings.TryGetValue(linkKey, out b)) return false;
-                }
+                    if (isShuttingDown) return false;
 
-                try
-                {
-                    bool ok = false;
-                    if (b.Vendor == WinApi.DisplayAdapterVendor.Nvidia && nvSetDvcLevel != null)
-                        ok = nvSetDvcLevel(b.NvDisplayHandle, 0, (uint)value) == NVAPI_OK;
-                    else if (b.Vendor == WinApi.DisplayAdapterVendor.Amd && adlColorSet != null)
-                        ok = adlColorSet(b.AdlAdapterIndex, b.AdlDisplayIndex, ADL_DISPLAY_COLOR_SATURATION, value) == 0;
+                    Binding b;
+                    lock (_globalInitLock)
+                    {
+                        if (!bindings.TryGetValue(linkKey, out b)) return false;
+                    }
 
-                    if (ok) display.saturation = value;
-                    else Logger.Warn("Saturation apply failed for " + display.displayName + ". Vendor=" + b.Vendor + ", Value=" + value);
+                    try
+                    {
+                        bool ok = false;
+                        if (b.Vendor == WinApi.DisplayAdapterVendor.Nvidia && nvSetDvcLevel != null)
+                            ok = nvSetDvcLevel(b.NvDisplayHandle, 0, (uint)value) == NVAPI_OK;
+                        else if (b.Vendor == WinApi.DisplayAdapterVendor.Amd && adlColorSet != null)
+                            ok = adlColorSet(b.AdlAdapterIndex, b.AdlDisplayIndex, ADL_DISPLAY_COLOR_SATURATION, value) == 0;
 
-                    return ok;
+                        if (ok) display.saturation = value;
+                        else Logger.Warn("Saturation apply failed for " + display.displayName + ". Vendor=" + b.Vendor + ", Value=" + value);
+
+                        return ok;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error("Saturation apply threw an exception for " + display.displayName, ex);
+                        return false;
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Logger.Error("Saturation apply threw an exception for " + display.displayName, ex);
-                    return false;
-                }
+            }
+            finally
+            {
+                _lifecycleLock.ExitReadLock();
             }
         }
 
@@ -250,77 +261,93 @@ namespace Gamma_Manager
 
         public static void Reset()
         {
-            lock (_globalInitLock)
+            if (!_lifecycleLock.TryEnterReadLock(1500)) return;
+            try
             {
-                if (isShuttingDown) return;
-
-                foreach (KeyValuePair<string, int> pair in originalValues)
+                lock (_globalInitLock)
                 {
-                    if (!bindings.TryGetValue(pair.Key, out Binding b)) continue;
-                    try
+                    if (isShuttingDown) return;
+
+                    foreach (KeyValuePair<string, int> pair in originalValues)
                     {
-                        if (b.Vendor == WinApi.DisplayAdapterVendor.Nvidia && nvSetDvcLevel != null)
-                            nvSetDvcLevel(b.NvDisplayHandle, 0, (uint)pair.Value);
-                        else if (b.Vendor == WinApi.DisplayAdapterVendor.Amd && adlColorSet != null)
-                            adlColorSet(b.AdlAdapterIndex, b.AdlDisplayIndex, ADL_DISPLAY_COLOR_SATURATION, pair.Value);
+                        if (!bindings.TryGetValue(pair.Key, out Binding b)) continue;
+                        try
+                        {
+                            if (b.Vendor == WinApi.DisplayAdapterVendor.Nvidia && nvSetDvcLevel != null)
+                                nvSetDvcLevel(b.NvDisplayHandle, 0, (uint)pair.Value);
+                            else if (b.Vendor == WinApi.DisplayAdapterVendor.Amd && adlColorSet != null)
+                                adlColorSet(b.AdlAdapterIndex, b.AdlDisplayIndex, ADL_DISPLAY_COLOR_SATURATION, pair.Value);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warn("Saturation reset failed for display link " + pair.Key + ": " + ex.Message);
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn("Saturation reset failed for display link " + pair.Key + ": " + ex.Message);
-                    }
+                    originalValues.Clear();
+                    usedAmdTargets.Clear();
+                    bindings.Clear();
+                    _adapterLocks.Clear();
                 }
-                originalValues.Clear();
-                usedAmdTargets.Clear();
-                bindings.Clear();
-                _adapterLocks.Clear();
+            }
+            finally
+            {
+                _lifecycleLock.ExitReadLock();
             }
         }
 
         public static void Shutdown()
         {
-            lock (_globalInitLock)
+            _lifecycleLock.EnterWriteLock();
+            try
             {
-                isShuttingDown = true;
-                try
+                lock (_globalInitLock)
                 {
-                    if (adlReady && adlDestroy != null)
+                    isShuttingDown = true;
+                    try
                     {
-                        try { adlDestroy(); } catch (Exception ex) { Logger.Warn("ADL shutdown failed: " + ex.Message); }
+                        if (adlReady && adlDestroy != null)
+                        {
+                            try { adlDestroy(); } catch (Exception ex) { Logger.Warn("ADL shutdown failed: " + ex.Message); }
+                        }
+                    }
+                    finally
+                    {
+                        adlReady = false;
+                        adlAlloc = null;
+                        adlCreate = null;
+                        adlDestroy = null;
+                        adlAdapterCount = null;
+                        adlDisplayInfoGet = null;
+                        adlColorGet = null;
+                        adlColorSet = null;
+                        if (adl != IntPtr.Zero)
+                        {
+                            try { FreeLibrary(adl); } catch { }
+                            adl = IntPtr.Zero;
+                        }
+
+                        nvReady = false;
+                        nvQuery = null;
+                        nvInitialize = null;
+                        nvGetAssociatedDisplayHandle = null;
+                        nvGetDvcInfo = null;
+                        nvSetDvcLevel = null;
+                        if (nvapi != IntPtr.Zero)
+                        {
+                            try { FreeLibrary(nvapi); } catch { }
+                            nvapi = IntPtr.Zero;
+                        }
+
+                        bindings.Clear();
+                        originalValues.Clear();
+                        usedAmdTargets.Clear();
+                        _adapterLocks.Clear();
                     }
                 }
-                finally
-                {
-                    adlReady = false;
-                    adlAlloc = null;
-                    adlCreate = null;
-                    adlDestroy = null;
-                    adlAdapterCount = null;
-                    adlDisplayInfoGet = null;
-                    adlColorGet = null;
-                    adlColorSet = null;
-                    if (adl != IntPtr.Zero)
-                    {
-                        try { FreeLibrary(adl); } catch { }
-                        adl = IntPtr.Zero;
-                    }
-
-                    nvReady = false;
-                    nvQuery = null;
-                    nvInitialize = null;
-                    nvGetAssociatedDisplayHandle = null;
-                    nvGetDvcInfo = null;
-                    nvSetDvcLevel = null;
-                    if (nvapi != IntPtr.Zero)
-                    {
-                        try { FreeLibrary(nvapi); } catch { }
-                        nvapi = IntPtr.Zero;
-                    }
-
-                    bindings.Clear();
-                    originalValues.Clear();
-                    usedAmdTargets.Clear();
-                    _adapterLocks.Clear();
-                }
+            }
+            finally
+            {
+                _lifecycleLock.ExitWriteLock();
             }
         }
 

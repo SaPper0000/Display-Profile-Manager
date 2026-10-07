@@ -89,6 +89,10 @@ namespace Gamma_Manager
             public int monitorContrast;
             public int shadowBoost;
             public int shadowBoostMode;
+            public int shadowBoostTint;
+            public int highlightGuard;
+            public int shadowBoostCustomPeak;
+            public int shadowBoostCustomWidth;
         }
     }
 }

@@ -16,6 +16,39 @@ namespace Gamma_Manager
         private Button buttonGameAuto;
         private Button buttonUpdateDefault;
         private Button btnVideoFilterExport;
+        private Button btnScreenshotSettings;
+
+        public void UpdateScreenshotButtonState()
+        {
+            if (btnScreenshotSettings == null) return;
+            bool ko = LanguageManager.Korean;
+            string hk = ScreenshotManager.GetHotkey(iniFile);
+            if (string.IsNullOrEmpty(hk))
+            {
+                hk = iniFile?.Read(HotkeySettingsForm.SCREENSHOT_PRESET, "Hotkeys");
+            }
+
+            if (!string.IsNullOrEmpty(hk))
+            {
+                btnScreenshotSettings.Text = ko ? $"📸 필터 스크린샷 [{hk}]" : $"📸 Filtered Screenshot [{hk}]";
+                btnScreenshotSettings.ForeColor = Color.FromArgb(75, 180, 255); // 하늘색 활성
+            }
+            else
+            {
+                btnScreenshotSettings.Text = ko ? "📸 필터 스크린샷 설정..." : "📸 Filtered Screenshot Settings...";
+                btnScreenshotSettings.ForeColor = ThemeManager.IsDark
+                    ? Color.FromArgb(180, 186, 198)
+                    : Color.FromArgb(110, 115, 125);
+            }
+
+            if (topMostToolTip != null)
+            {
+                string tip = ko
+                    ? "단축키로 현재 모니터의 감마/블랙 EQ/색감 필터가 적용된 스크린샷을 즉시 캡처하고 클립보드에 복사/저장합니다."
+                    : "Capture screenshots with current display profile (Gamma, Black EQ, Color) applied and copy to clipboard/file.";
+                topMostToolTip.SetToolTip(btnScreenshotSettings, tip);
+            }
+        }
 
         private static void ConfigureNumericBox(NumericUpDown box, decimal minimum, decimal maximum, decimal value, decimal increment, int decimals)
         {
@@ -39,12 +72,12 @@ namespace Gamma_Manager
 
             if (isEnabled)
             {
-                btnOsdSettings.Text = ko ? "💬 OSD 팝업 알림  [ON]" : "💬 OSD Notification  [ON]";
+                btnOsdSettings.Text = ko ? "💬 OSD 알림 [ON]" : "💬 OSD [ON]";
                 btnOsdSettings.ForeColor = Color.FromArgb(255, 75, 75); // 빨간색 ON
             }
             else
             {
-                btnOsdSettings.Text = ko ? "💬 OSD 팝업 알림  [OFF]" : "💬 OSD Notification  [OFF]";
+                btnOsdSettings.Text = ko ? "💬 OSD 알림 [OFF]" : "💬 OSD [OFF]";
                 btnOsdSettings.ForeColor = ThemeManager.IsDark
                     ? Color.FromArgb(180, 186, 198)
                     : Color.FromArgb(110, 115, 125); // 회색 OFF
@@ -104,8 +137,8 @@ namespace Gamma_Manager
         private void ApplyLanguage()
         {
             bool ko = LanguageManager.Korean;
-            Text = "Display Profile Manager v1.5.5";
-            notifyIcon.Text = "Display Profile Manager v1.5.5";
+            Text = "Display Profile Manager v1.5.6";
+            notifyIcon.Text = "Display Profile Manager v1.5.6";
 
             buttonRed.Text = ko ? "빨강" : "Red";
             buttonGreen.Text = ko ? "초록" : "Green";
@@ -125,15 +158,16 @@ namespace Gamma_Manager
             if (buttonBackup != null) buttonBackup.Text = ko ? "백업" : "Backup";
             if (buttonRestore != null) buttonRestore.Text = ko ? "불러오기" : "Restore";
             if (buttonUpdateCheck != null) buttonUpdateCheck.Text = ko ? "업데이트 확인" : "Check for Updates";
-            if (buttonOpenFolder != null) buttonOpenFolder.Text = ko ? "📁 설정 / 로그 폴더 열기" : "📁 Open App Folder";
+            if (buttonOpenFolder != null) buttonOpenFolder.Text = ko ? "📁 폴더 열기" : "📁 Open Folder";
+            UpdateScreenshotButtonState();
             if (btnVideoFilterExport != null)
             {
-                btnVideoFilterExport.Text = ko ? "🎬 동영상 프로필 필터 적용 (.bat)" : "🎬 Apply Video Profile Filter (.bat)";
+                btnVideoFilterExport.Text = ko ? "🎬 동영상/이미지 프로필 필터 적용 (.bat)" : "🎬 Apply Video/Image Profile Filter (.bat)";
                 if (topMostToolTip != null)
                 {
                     string tip = ko
-                        ? "현재 프로필 색감(감마/대비/밝기/채도/블랙 EQ)을 영상에 그대로 입혀주는 드래그&드롭 배치 파일(.bat)을 생성합니다."
-                        : "Generate a drag & drop batch file (.bat) that applies your display profile to videos.";
+                        ? "현재 프로필 색감(감마/대비/밝기/채도/블랙 EQ)을 동영상 및 이미지(스크린샷)에 그대로 입혀주는 드래그&드롭 배치 파일(.bat)을 생성합니다."
+                        : "Generate a drag & drop batch file (.bat) that applies your display profile to videos and images.";
                     topMostToolTip.SetToolTip(btnVideoFilterExport, tip);
                 }
             }
@@ -271,6 +305,7 @@ namespace Gamma_Manager
             UpdateVolumeDuckButtonState();
             UpdateOSDButtonState();
             UpdateShadowBoostButtonState();
+            UpdateScreenshotButtonState();
             UpdateColorChannelButtonStyles(); // 테마 전환 시 활성 채널 색상 유지
         }
 
@@ -487,18 +522,18 @@ namespace Gamma_Manager
             buttonRestore.Click += buttonRestore_Click;
             rightCard.Controls.Add(buttonRestore);
 
-            buttonUpdateCheck = CreateButton(304, 36);
+            buttonUpdateCheck = CreateButton(146, 36);
             buttonUpdateCheck.Location = new Point(18, 364);
             buttonUpdateCheck.Click += buttonUpdateCheck_Click;
             rightCard.Controls.Add(buttonUpdateCheck);
 
-            buttonOpenFolder = CreateButton(304, 36);
-            buttonOpenFolder.Location = new Point(18, 410);
+            buttonOpenFolder = CreateButton(146, 36);
+            buttonOpenFolder.Location = new Point(176, 364);
             buttonOpenFolder.Click += buttonOpenFolder_Click;
             rightCard.Controls.Add(buttonOpenFolder);
 
             btnOsdSettings = CreateButton(304, 36);
-            btnOsdSettings.Location = new Point(18, 456);
+            btnOsdSettings.Location = new Point(18, 410);
             btnOsdSettings.Click += (s, e) => {
                 using (OSDSettingsForm osdForm = new OSDSettingsForm(iniFile))
                 {
@@ -509,12 +544,12 @@ namespace Gamma_Manager
             rightCard.Controls.Add(btnOsdSettings);
 
             btnVolumeDuck = CreateButton(304, 36);
-            btnVolumeDuck.Location = new Point(18, 502);
+            btnVolumeDuck.Location = new Point(18, 456);
             btnVolumeDuck.Click += btnVolumeDuck_Click;
             rightCard.Controls.Add(btnVolumeDuck);
 
             btnVideoFilterExport = CreateButton(304, 36);
-            btnVideoFilterExport.Location = new Point(18, 548);
+            btnVideoFilterExport.Location = new Point(18, 502);
             btnVideoFilterExport.Click += (s, e) => {
                 string curPreset = comboBoxPresets != null ? comboBoxPresets.Text : "Default";
                 List<string> presetsList = new List<string>();
@@ -536,6 +571,27 @@ namespace Gamma_Manager
                 }
             };
             rightCard.Controls.Add(btnVideoFilterExport);
+
+            btnScreenshotSettings = CreateButton(304, 36);
+            btnScreenshotSettings.Location = new Point(18, 548);
+            btnScreenshotSettings.Click += (s, e) => {
+                SuspendGlobalHotkeys();
+                try
+                {
+                    using (ScreenshotSettingsForm scForm = new ScreenshotSettingsForm(iniFile, this, displays, currDisplay))
+                    {
+                        if (scForm.ShowDialog(this) == DialogResult.OK)
+                        {
+                            UpdateScreenshotButtonState();
+                        }
+                    }
+                }
+                finally
+                {
+                    ResumeGlobalHotkeys();
+                }
+            };
+            rightCard.Controls.Add(btnScreenshotSettings);
 
             checkBoxLogEnabled = new CheckBox();
             checkBoxLogEnabled.AutoSize = true;

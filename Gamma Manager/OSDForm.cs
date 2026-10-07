@@ -165,9 +165,18 @@ namespace Gamma_Manager
                 try
                 {
                     bool isVolumeMsg = message != null && message.StartsWith("🔊");
+                    bool isScreenshotMsg = message != null && message.StartsWith("📸");
+                    bool isGameAutoMsg = message != null && message.StartsWith("🎮");
                     bool isEnabled;
 
-                    if (isVolumeMsg)
+                    if (isScreenshotMsg)
+                    {
+                        string scOsdStr = IniFile.Shared.Read("ShowOSD", "Screenshot");
+                        isEnabled = string.IsNullOrEmpty(scOsdStr) ||
+                                    scOsdStr.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                    scOsdStr == "1";
+                    }
+                    else if (isVolumeMsg)
                     {
                         string duckOsdStr = IniFile.Shared.Read("VolumeDuckOSD", "Settings");
                         isEnabled = string.IsNullOrEmpty(duckOsdStr) ||
@@ -177,9 +186,26 @@ namespace Gamma_Manager
                     else
                     {
                         string enabledStr = IniFile.Shared.Read("OsdEnabled", "Settings");
-                        isEnabled = string.IsNullOrEmpty(enabledStr) ||
-                                    enabledStr.Equals("True", StringComparison.OrdinalIgnoreCase) ||
-                                    enabledStr == "1";
+                        bool mainEnabled = string.IsNullOrEmpty(enabledStr) ||
+                                           enabledStr.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                           enabledStr == "1";
+
+                        if (!mainEnabled) return;
+
+                        if (isGameAutoMsg)
+                        {
+                            string gaOsdStr = IniFile.Shared.Read("OsdGameAutoEnabled", "Settings");
+                            isEnabled = string.IsNullOrEmpty(gaOsdStr) ||
+                                        gaOsdStr.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                        gaOsdStr == "1";
+                        }
+                        else
+                        {
+                            string hkOsdStr = IniFile.Shared.Read("OsdHotkeyEnabled", "Settings");
+                            isEnabled = string.IsNullOrEmpty(hkOsdStr) ||
+                                        hkOsdStr.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+                                        hkOsdStr == "1";
+                        }
                     }
 
                     if (!isEnabled) return;
@@ -200,7 +226,7 @@ namespace Gamma_Manager
 
         private void UpdateOSD(string displayLink, string message, bool persistent = false)
         {
-            if (!message.StartsWith("🔊"))
+            if (!message.StartsWith("🔊") && !message.StartsWith("📸"))
             {
                 int colonIndex = message.IndexOf(": ");
                 if (colonIndex > 0)
@@ -344,6 +370,12 @@ namespace Gamma_Manager
             this.Location = new Point(x, y);
 
             if (!this.Visible) this.Show();
+            try
+            {
+                WinApi.SetWindowPos(this.Handle, WinApi.HWND_TOPMOST, x, y, this.Width, this.Height, WinApi.SWP_NOACTIVATE | WinApi.SWP_SHOWWINDOW);
+                this.BringToFront();
+            }
+            catch { }
 
             this.Invalidate();
 

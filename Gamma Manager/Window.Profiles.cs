@@ -26,36 +26,15 @@ namespace Gamma_Manager
                 string monitorKey = DisplayService.GetMonitorKey(display);
                 if (string.IsNullOrEmpty(monitorKey)) continue;
 
-                string defaultPreset = prefix + display.displayName;
-                if (!string.IsNullOrEmpty(iniFile.Read("monitor", defaultPreset)))
+                string defaultPreset = GetDefaultProfileName(display);
+                if (!string.IsNullOrEmpty(defaultPreset) && !string.IsNullOrEmpty(iniFile.Read("monitor", defaultPreset)))
                 {
                     currentPresetByMonitor[monitorKey] = defaultPreset;
 
                     // INI에 저장되어 있는 [기본값] 프로필 수치를 모니터 객체에 즉시 동기화
-                    display.rGamma = ReadProfileFloat("rGamma", defaultPreset, display.rGamma);
-                    display.gGamma = ReadProfileFloat("gGamma", defaultPreset, display.gGamma);
-                    display.bGamma = ReadProfileFloat("bGamma", defaultPreset, display.bGamma);
-                    display.rContrast = ReadProfileFloat("rContrast", defaultPreset, display.rContrast);
-                    display.gContrast = ReadProfileFloat("gContrast", defaultPreset, display.gContrast);
-                    display.bContrast = ReadProfileFloat("bContrast", defaultPreset, display.bContrast);
-                    display.rBright = ReadProfileFloat("rBright", defaultPreset, display.rBright);
-                    display.gBright = ReadProfileFloat("gBright", defaultPreset, display.gBright);
-                    display.bBright = ReadProfileFloat("bBright", defaultPreset, display.bBright);
-
-                    if (int.TryParse(iniFile.Read("saturation", defaultPreset), out int sat))
-                        display.saturation = Clamp(sat, display.saturationMin, display.saturationMax);
-
-                    if (int.TryParse(iniFile.Read("monitorBrightness", defaultPreset), out int mb))
-                        display.monitorBrightness = Clamp(mb, 0, 100);
-
-                    if (int.TryParse(iniFile.Read("monitorContrast", defaultPreset), out int mc))
-                        display.monitorContrast = Clamp(mc, 0, 100);
-
-                    if (int.TryParse(iniFile.Read("shadowBoost", defaultPreset), out int sb))
-                        display.shadowBoost = Clamp(sb, 0, 100);
-
-                    if (int.TryParse(iniFile.Read("shadowBoostMode", defaultPreset), out int sbm))
-                        display.shadowBoostMode = Clamp(sbm, 0, 2);
+                    ProfileData profile = ProfileData.ReadFromIni(iniFile, defaultPreset, display);
+                    profile.ApplyTo(display);
+                    display.saturationDefault = display.saturation;
                 }
             }
         }
@@ -78,6 +57,18 @@ namespace Gamma_Manager
                 return defaultPreset;
             }
             return null;
+        }
+
+        private string GetDefaultProfileName(Display.DisplayInfo d)
+        {
+            if (d == null || string.IsNullOrEmpty(d.displayName)) return null;
+            string prefixKo = "기본값 - ";
+            string prefixEn = "Default - ";
+            string nameKo = prefixKo + d.displayName;
+            if (!string.IsNullOrEmpty(iniFile.Read("monitor", nameKo))) return nameKo;
+            string nameEn = prefixEn + d.displayName;
+            if (!string.IsNullOrEmpty(iniFile.Read("monitor", nameEn))) return nameEn;
+            return (LanguageManager.Korean ? prefixKo : prefixEn) + d.displayName;
         }
 
         private void MarkCurrentMonitorAsCustom()
@@ -220,27 +211,8 @@ namespace Gamma_Manager
                     cVal = origC;
                 }
 
-                iniFile.Write("monitor", display.displayName, defaultName);
-                if (!string.IsNullOrEmpty(display.hardwareId))
-                {
-                    iniFile.Write("hardwareId", display.hardwareId, defaultName);
-                }
-                if (!string.IsNullOrEmpty(display.monitorKey))
-                {
-                    iniFile.Write("monitorKey", DisplayService.GetMonitorKey(display), defaultName);
-                }
-                iniFile.Write("rGamma", display.rGamma.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("gGamma", display.gGamma.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("bGamma", display.bGamma.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("rContrast", display.rContrast.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("gContrast", display.gContrast.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("bContrast", display.bContrast.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("rBright", display.rBright.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("gBright", display.gBright.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("bBright", display.bBright.ToString("0.00", CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("saturation", display.saturation.ToString(), defaultName);
-                iniFile.Write("monitorBrightness", bVal.ToString(CultureInfo.InvariantCulture), defaultName);
-                iniFile.Write("monitorContrast", cVal.ToString(CultureInfo.InvariantCulture), defaultName);
+                ProfileData defaultData = ProfileData.FromDisplay(display, bVal, cVal);
+                defaultData.WriteToIni(iniFile, defaultName);
             }
         }
 
@@ -309,29 +281,8 @@ namespace Gamma_Manager
                 }
             }
 
-            iniFile.Write("monitor", currDisplay.displayName, fullProfileName);
-            if (!string.IsNullOrEmpty(currDisplay.hardwareId))
-            {
-                iniFile.Write("hardwareId", currDisplay.hardwareId, fullProfileName);
-            }
-            if (!string.IsNullOrEmpty(currDisplay.monitorKey))
-            {
-                iniFile.Write("monitorKey", DisplayService.GetMonitorKey(currDisplay), fullProfileName);
-            }
-            iniFile.Write("rGamma", currDisplay.rGamma.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("gGamma", currDisplay.gGamma.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("bGamma", currDisplay.bGamma.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("rContrast", currDisplay.rContrast.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("gContrast", currDisplay.gContrast.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("bContrast", currDisplay.bContrast.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("rBright", currDisplay.rBright.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("gBright", currDisplay.gBright.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("bBright", currDisplay.bBright.ToString("0.00", CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("saturation", currDisplay.saturation.ToString(), fullProfileName);
-            iniFile.Write("shadowBoost", currDisplay.shadowBoost.ToString(), fullProfileName);
-            iniFile.Write("shadowBoostMode", currDisplay.shadowBoostMode.ToString(), fullProfileName);
-            iniFile.Write("monitorBrightness", savedMonitorBrightness.ToString(CultureInfo.InvariantCulture), fullProfileName);
-            iniFile.Write("monitorContrast", savedMonitorContrast.ToString(CultureInfo.InvariantCulture), fullProfileName);
+            ProfileData saveData = ProfileData.FromDisplay(currDisplay, savedMonitorBrightness, savedMonitorContrast);
+            saveData.WriteToIni(iniFile, fullProfileName);
 
             iniFile.Write("LastProfile_" + currDisplay.displayName, fullProfileName, "Settings");
             iniFile.Flush();
@@ -635,38 +586,8 @@ namespace Gamma_Manager
 
                 if (currDisplay == null) return;
 
-                currDisplay.rGamma = ReadProfileFloat("rGamma", actualSection, currDisplay.rGamma);
-                currDisplay.gGamma = ReadProfileFloat("gGamma", actualSection, currDisplay.gGamma);
-                currDisplay.bGamma = ReadProfileFloat("bGamma", actualSection, currDisplay.bGamma);
-                currDisplay.rContrast = ReadProfileFloat("rContrast", actualSection, currDisplay.rContrast);
-                currDisplay.gContrast = ReadProfileFloat("gContrast", actualSection, currDisplay.gContrast);
-                currDisplay.bContrast = ReadProfileFloat("bContrast", actualSection, currDisplay.bContrast);
-                currDisplay.rBright = ReadProfileFloat("rBright", actualSection, currDisplay.rBright);
-                currDisplay.gBright = ReadProfileFloat("gBright", actualSection, currDisplay.gBright);
-                currDisplay.bBright = ReadProfileFloat("bBright", actualSection, currDisplay.bBright);
-
-                string saturationText = iniFile.Read("saturation", actualSection);
-                if (!int.TryParse(saturationText, out int parsedSaturation))
-                    parsedSaturation = currDisplay.saturationDefault;
-                currDisplay.saturation = Clamp(parsedSaturation, currDisplay.saturationMin, currDisplay.saturationMax);
-
-                string shadowBoostText = iniFile.Read("shadowBoost", actualSection);
-                if (!int.TryParse(shadowBoostText, out int parsedShadowBoost))
-                    parsedShadowBoost = 0;
-                currDisplay.shadowBoost = Clamp(parsedShadowBoost, 0, 100);
-
-                string shadowBoostModeText = iniFile.Read("shadowBoostMode", actualSection);
-                if (!int.TryParse(shadowBoostModeText, out int parsedShadowBoostMode))
-                    parsedShadowBoostMode = 0;
-                currDisplay.shadowBoostMode = Clamp(parsedShadowBoostMode, 0, 2);
-
-                if (!int.TryParse(iniFile.Read("monitorBrightness", actualSection), out int storedMonitorBrightness))
-                    storedMonitorBrightness = currDisplay.monitorBrightness;
-                if (!int.TryParse(iniFile.Read("monitorContrast", actualSection), out int storedMonitorContrast))
-                    storedMonitorContrast = currDisplay.monitorContrast;
-
-                currDisplay.monitorBrightness = Clamp(storedMonitorBrightness, 0, 100);
-                currDisplay.monitorContrast = Clamp(storedMonitorContrast, 0, 100);
+                ProfileData presetData = ProfileData.ReadFromIni(iniFile, actualSection, currDisplay);
+                presetData.ApplyTo(currDisplay);
 
                 fillInfo(currDisplay);
                 clearColors();

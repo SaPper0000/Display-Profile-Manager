@@ -89,7 +89,11 @@ namespace Gamma_Manager
                 display.rContrast, display.gContrast, display.bContrast,
                 display.rBright, display.gBright, display.bBright,
                 display.shadowBoost,
-                display.shadowBoostMode);
+                display.shadowBoostMode,
+                display.shadowBoostTint,
+                display.highlightGuard,
+                display.shadowBoostCustomPeak,
+                display.shadowBoostCustomWidth);
 
             bool gammaOk = Gamma.SetGammaRamp(display.displayLink, gammaRamp);
 

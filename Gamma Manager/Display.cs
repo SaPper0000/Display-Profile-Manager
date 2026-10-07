@@ -55,6 +55,10 @@ namespace Gamma_Manager
             public int monitorContrast = 50;
             public int shadowBoost = 0;
             public int shadowBoostMode = 0;
+            public int shadowBoostTint = 0; // 0: Neutral, 1: Warm, 2: Cold
+            public int highlightGuard = 0; // 눈부심 방지 강도 (0: OFF, 1~100%)
+            public int shadowBoostCustomPeak = 25; // 커스텀 피크 중심 (10% ~ 40%)
+            public int shadowBoostCustomWidth = 3; // 커스텀 대역폭 (1: 좁음 ~ 5: 넓음)
         }
         #endregion
 

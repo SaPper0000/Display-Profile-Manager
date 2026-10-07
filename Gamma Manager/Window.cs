@@ -121,12 +121,13 @@ namespace Gamma_Manager
             buttonGreen.Font = _cachedRegularFont;
             buttonBlue.Font = _cachedRegularFont;
 
-            this.Text = "Display Profile Manager v1.5.5";
-            if (notifyIcon != null) notifyIcon.Text = "Display Profile Manager v1.5.5";
+            this.Text = "Display Profile Manager v1.5.6";
+            if (notifyIcon != null) notifyIcon.Text = "Display Profile Manager v1.5.6";
 
             // 2. 창이 화면에 뜨자마자(Shown) 비동기 백그라운드 로딩 시작
             Shown += Window_ShownAsync;
             FormClosed += Window_FormClosed;
+            Activated += Window_Activated;
             // 모니터 케이블 탈착/절전 복귀 이벤트 리스너 등록
             RegisterSystemEvents();
         }
@@ -147,6 +148,7 @@ namespace Gamma_Manager
                 }
 
                 List<Display.DisplayInfo> loadedDisplays = null;
+                bool hadAbnormalTermination = false;
 
                 // 1. 하드웨어 조회 및 DDC/CI 캡처 작업을 백그라운드에서 실행
                 await Task.Run(() =>
@@ -162,7 +164,8 @@ namespace Gamma_Manager
                     if (loadedDisplays.Count > 0)
                     {
                         // 백업 파일이 남아있는지 확인 (비정상 종료 여부 체크)
-                        if (StartupStateManager.HasPendingBackup())
+                        hadAbnormalTermination = StartupStateManager.HasPendingBackup();
+                        if (hadAbnormalTermination)
                         {
                             Logger.Warn("Previous session terminated abnormally. Restoring original display settings...");
                             StartupStateManager.RestorePending(loadedDisplays);
@@ -213,6 +216,9 @@ namespace Gamma_Manager
                 RefreshGlobalHotkeys();
                 if (IsGameAutoEnabled())
                     SetupGameAutoHook();
+
+                // 4. 시작 시 모니터 하드웨어/채도 설정 변경 감지 및 확인창 안내
+                CheckDefaultMismatchOnStartup(hadAbnormalTermination);
             }
             catch (Exception ex)
             {

@@ -270,6 +270,7 @@ namespace Gamma_Manager
             finally
             {
                 ResumeGlobalHotkeys();
+                UpdateScreenshotButtonState();
             }
         }
 
@@ -500,28 +501,12 @@ namespace Gamma_Manager
                 : currDisplay.monitorContrast;
 
             // 2. INI 파일의 [기본값 - 모니터명] 섹션 갱신 (Config)
-            iniFile.Write("monitor", currDisplay.displayName, defaultProfileName);
-            if (!string.IsNullOrEmpty(currDisplay.hardwareId))
-                iniFile.Write("hardwareId", currDisplay.hardwareId, defaultProfileName);
-            if (!string.IsNullOrEmpty(currDisplay.monitorKey))
-                iniFile.Write("monitorKey", DisplayService.GetMonitorKey(currDisplay), defaultProfileName);
-
-            iniFile.Write("rGamma", currDisplay.rGamma.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("gGamma", currDisplay.gGamma.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("bGamma", currDisplay.bGamma.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("rContrast", currDisplay.rContrast.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("gContrast", currDisplay.gContrast.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("bContrast", currDisplay.bContrast.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("rBright", currDisplay.rBright.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("gBright", currDisplay.gBright.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("bBright", currDisplay.bBright.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("saturation", currDisplay.saturation.ToString(), defaultProfileName);
-            iniFile.Write("shadowBoost", currDisplay.shadowBoost.ToString(), defaultProfileName);
-            iniFile.Write("shadowBoostMode", currDisplay.shadowBoostMode.ToString(), defaultProfileName);
-            iniFile.Write("monitorBrightness", savedMonitorBrightness.ToString(System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-            iniFile.Write("monitorContrast", savedMonitorContrast.ToString(System.Globalization.CultureInfo.InvariantCulture), defaultProfileName);
-
+            ProfileData defaultData = ProfileData.FromDisplay(currDisplay, savedMonitorBrightness, savedMonitorContrast);
+            defaultData.WriteToIni(iniFile, defaultProfileName);
             iniFile.Flush();
+
+            // 모니터 메모리 객체의 기본값(Default)도 현재 세팅으로 동기화 (초기화 및 토글 복원 시 정확한 복원 보장)
+            currDisplay.saturationDefault = defaultData.Saturation;
 
             // 3. 현재 모니터의 활성 프로필 상태를 '기본값'으로 인식
             string monitorKey = DisplayService.GetMonitorKey(currDisplay);
@@ -551,11 +536,42 @@ namespace Gamma_Manager
         {
             if (currDisplay == null) return;
 
-            using (ShadowBoostSettingsForm form = new ShadowBoostSettingsForm(currDisplay, displayService, () =>
-            {
-                MarkCurrentMonitorAsCustom();
-                UpdateShadowBoostButtonState();
-            }))
+            using (ShadowBoostSettingsForm form = new ShadowBoostSettingsForm(
+                currDisplay,
+                displays,
+                displayService,
+                () =>
+                {
+                    if (displays != null)
+                    {
+                        foreach (var d in displays)
+                        {
+                            if (d == null) continue;
+                            string k = DisplayService.GetMonitorKey(d);
+                            if (!string.IsNullOrEmpty(k))
+                                currentPresetByMonitor.Remove(k);
+                        }
+                    }
+                    MarkCurrentMonitorAsCustom();
+                    UpdateShadowBoostButtonState();
+                },
+                (newSelectedDisp) =>
+                {
+                    if (newSelectedDisp != null && newSelectedDisp != currDisplay && displays != null)
+                    {
+                        int idx = displays.IndexOf(newSelectedDisp);
+                        if (idx >= 0 && comboBoxMonitors != null && idx < comboBoxMonitors.Items.Count)
+                        {
+                            disableChangeFunc = true;
+                            comboBoxMonitors.SelectedIndex = idx;
+                            numDisplay = idx;
+                            currDisplay = newSelectedDisp;
+                            fillInfo(currDisplay);
+                            disableChangeFunc = false;
+                            UpdateShadowBoostButtonState();
+                        }
+                    }
+                }))
             {
                 form.ShowDialog(this);
             }

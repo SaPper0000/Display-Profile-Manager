@@ -463,6 +463,46 @@ namespace Gamma_Manager
             return false;
         }
 
+        public static bool TryGetOriginalSaturation(string displayLink, out int saturation)
+        {
+            saturation = 100;
+            if (string.IsNullOrEmpty(displayLink)) return false;
+
+            try
+            {
+                StartupState state = null;
+                lock (_stateLock)
+                {
+                    state = _cachedState;
+                }
+
+                if (state == null && File.Exists(BackupPath))
+                {
+                    using (FileStream fs = File.OpenRead(BackupPath))
+                    {
+                        state = (StartupState)new DataContractJsonSerializer(typeof(StartupState)).ReadObject(fs);
+                    }
+                    lock (_stateLock)
+                    {
+                        _cachedState = state;
+                    }
+                }
+
+                if (state == null || state.Displays == null) return false;
+
+                foreach (var saved in state.Displays)
+                {
+                    if (string.Equals(saved.DisplayLink, displayLink, StringComparison.OrdinalIgnoreCase))
+                    {
+                        saturation = saved.Saturation;
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+
         public static void RestoreAndClear(List<Display.DisplayInfo> displays)
         {
             RestorePending(displays);

@@ -195,6 +195,10 @@ namespace Gamma_Manager
                 saturation = display.saturation,
                 shadowBoost = display.shadowBoost,
                 shadowBoostMode = display.shadowBoostMode,
+                shadowBoostTint = display.shadowBoostTint,
+                highlightGuard = display.highlightGuard,
+                shadowBoostCustomPeak = display.shadowBoostCustomPeak,
+                shadowBoostCustomWidth = display.shadowBoostCustomWidth,
 
                 monitorBrightness = currentBrightness,
                 monitorContrast = currentContrast
@@ -216,7 +220,11 @@ namespace Gamma_Manager
             display.rBright = state.rBright; display.gBright = state.gBright; display.bBright = state.bBright;
             display.saturation = Clamp(state.saturation, display.saturationMin, display.saturationMax);
             display.shadowBoost = Clamp(state.shadowBoost, 0, 100);
-            display.shadowBoostMode = Clamp(state.shadowBoostMode, 0, 2);
+            display.shadowBoostMode = Clamp(state.shadowBoostMode, 0, 4);
+            display.shadowBoostTint = Clamp(state.shadowBoostTint, 0, 2);
+            display.highlightGuard = Clamp(state.highlightGuard, 0, 100);
+            display.shadowBoostCustomPeak = Clamp(state.shadowBoostCustomPeak > 0 ? state.shadowBoostCustomPeak : 25, 10, 40);
+            display.shadowBoostCustomWidth = Clamp(state.shadowBoostCustomWidth > 0 ? state.shadowBoostCustomWidth : 3, 1, 5);
             display.monitorBrightness = Math.Max(0, Math.Min(100, state.monitorBrightness));
             display.monitorContrast = Math.Max(0, Math.Min(100, state.monitorContrast));
 
@@ -230,7 +238,13 @@ namespace Gamma_Manager
                 {
                     if (!string.IsNullOrEmpty(display.displayLink))
                     {
-                        Gamma.SetGammaRamp(display.displayLink, Gamma.CreateGammaRamp(display.rGamma, display.gGamma, display.bGamma, display.rContrast, display.gContrast, display.bContrast, display.rBright, display.gBright, display.bBright, display.shadowBoost, display.shadowBoostMode));
+                        Gamma.SetGammaRamp(display.displayLink, Gamma.CreateGammaRamp(
+                            display.rGamma, display.gGamma, display.bGamma,
+                            display.rContrast, display.gContrast, display.bContrast,
+                            display.rBright, display.gBright, display.bBright,
+                            display.shadowBoost, display.shadowBoostMode,
+                            display.shadowBoostTint, display.highlightGuard,
+                            display.shadowBoostCustomPeak, display.shadowBoostCustomWidth));
                     }
                 }
             }
@@ -288,11 +302,25 @@ namespace Gamma_Manager
             int currentGen = displayService != null ? displayService.NextGeneration(monitorKey) : 0;
             int targetTopologyGen = displayService != null ? displayService.CurrentTopologyGeneration : 0;
 
+            string defPreset = GetDefaultProfileName(targetDisplay);
+
             int origBrightness = targetDisplay.monitorBrightness;
             int origContrast = targetDisplay.monitorContrast;
-            if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out int bVal, out int cVal))
+            if (!string.IsNullOrEmpty(defPreset) && int.TryParse(iniFile.Read("monitorBrightness", defPreset), out int parsedB))
+            {
+                origBrightness = parsedB;
+            }
+            else if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out int bVal, out _))
             {
                 origBrightness = bVal;
+            }
+
+            if (!string.IsNullOrEmpty(defPreset) && int.TryParse(iniFile.Read("monitorContrast", defPreset), out int parsedC))
+            {
+                origContrast = parsedC;
+            }
+            else if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out _, out int cVal))
+            {
                 origContrast = cVal;
             }
 
@@ -303,7 +331,21 @@ namespace Gamma_Manager
             targetDisplay.rBright = 0f; targetDisplay.gBright = 0f; targetDisplay.bBright = 0f;
             targetDisplay.shadowBoost = 0;
             targetDisplay.shadowBoostMode = 0;
-            if (targetDisplay.saturationSupported) targetDisplay.saturation = targetDisplay.saturationDefault;
+            targetDisplay.shadowBoostTint = 0;
+            targetDisplay.highlightGuard = 0;
+            targetDisplay.shadowBoostCustomPeak = 25;
+            // 기본값 채도 결정 (1순위: INI의 [기본값] 프로필, 2순위: StartupState 백업, 3순위: saturationDefault)
+            int satDef = targetDisplay.saturationDefault;
+            if (!string.IsNullOrEmpty(defPreset) && int.TryParse(iniFile.Read("saturation", defPreset), out int parsedSat))
+            {
+                satDef = parsedSat;
+            }
+            else if (StartupStateManager.TryGetOriginalSaturation(targetDisplay.displayLink, out int origSat))
+            {
+                satDef = origSat;
+            }
+            targetDisplay.saturationDefault = satDef;
+            if (targetDisplay.saturationSupported) targetDisplay.saturation = satDef;
 
             // 소프트웨어 감마 즉시 동기 적용
             if (displayService != null)
@@ -322,7 +364,6 @@ namespace Gamma_Manager
 
             if (targetDisplay.saturationSupported)
             {
-                int satDef = targetDisplay.saturationDefault;
                 Display.DisplayInfo satDisp = targetDisplay;
                 string satKey = monitorKey;
                 int satGen = currentGen;
@@ -367,13 +408,28 @@ namespace Gamma_Manager
             {
                 if (display == null) continue;
 
+                string defPreset = GetDefaultProfileName(display);
+
                 int origB = display.monitorBrightness;
                 int origC = display.monitorContrast;
-                if (StartupStateManager.TryGetOriginalValues(display.displayLink, out int bVal, out int cVal))
+                if (!string.IsNullOrEmpty(defPreset) && int.TryParse(iniFile.Read("monitorBrightness", defPreset), out int parsedB))
+                {
+                    origB = parsedB;
+                }
+                else if (StartupStateManager.TryGetOriginalValues(display.displayLink, out int bVal, out _))
                 {
                     origB = bVal;
+                }
+
+                if (!string.IsNullOrEmpty(defPreset) && int.TryParse(iniFile.Read("monitorContrast", defPreset), out int parsedC))
+                {
+                    origC = parsedC;
+                }
+                else if (StartupStateManager.TryGetOriginalValues(display.displayLink, out _, out int cVal))
+                {
                     origC = cVal;
                 }
+
                 display.monitorBrightness = origB;
                 display.monitorContrast = origC;
 
@@ -382,7 +438,20 @@ namespace Gamma_Manager
                 display.rBright = 0f; display.gBright = 0f; display.bBright = 0f;
                 display.shadowBoost = 0;
                 display.shadowBoostMode = 0;
-                if (display.saturationSupported) display.saturation = display.saturationDefault;
+                display.shadowBoostTint = 0;
+                display.highlightGuard = 0;
+                display.shadowBoostCustomPeak = 25;
+                int satDef = display.saturationDefault;
+                if (!string.IsNullOrEmpty(defPreset) && int.TryParse(iniFile.Read("saturation", defPreset), out int parsedSat))
+                {
+                    satDef = parsedSat;
+                }
+                else if (StartupStateManager.TryGetOriginalSaturation(display.displayLink, out int origSat))
+                {
+                    satDef = origSat;
+                }
+                display.saturationDefault = satDef;
+                if (display.saturationSupported) display.saturation = satDef;
 
                 string key = DisplayService.GetMonitorKey(display);
                 currentPresetByMonitor?.Remove(key);
@@ -471,6 +540,25 @@ namespace Gamma_Manager
                     }
                     else { hk.Dispose(); }
                 }
+            }
+
+            // 1-2. 화면 필터 스크린샷 핫키
+            string scHkText = ScreenshotManager.GetHotkey(iniFile);
+            if (string.IsNullOrEmpty(scHkText))
+            {
+                scHkText = iniFile.Read(HotkeySettingsForm.SCREENSHOT_PRESET, "Hotkeys");
+            }
+            if (TryParseHotkey(scHkText, out Keys scKey, out GlobalHotkey.Modifiers scMod))
+            {
+                int id = nextHotkeyId++;
+                GlobalHotkey hk = new GlobalHotkey(this.Handle, id, scKey, scMod);
+                hk.Pressed += delegate { ScreenshotManager.Capture(this, iniFile, displays, currDisplay); };
+                if (hk.Register())
+                {
+                    globalHotkeys[id] = hk;
+                    globalHotkeyPresets[id] = HotkeySettingsForm.SCREENSHOT_PRESET;
+                }
+                else { hk.Dispose(); }
             }
 
             // 2. 모니터별 초기화 & 순환 핫키
@@ -731,6 +819,10 @@ namespace Gamma_Manager
                                             saturation = targetDisplay.saturationDefault,
                                             shadowBoost = 0,
                                             shadowBoostMode = 0,
+                                            shadowBoostTint = 0,
+                                            highlightGuard = 0,
+                                            shadowBoostCustomPeak = 25,
+                                            shadowBoostCustomWidth = 3,
                                             monitorBrightness = origB,
                                             monitorContrast = origC
                                         };
@@ -818,6 +910,10 @@ namespace Gamma_Manager
                                     saturation = targetDisplay.saturationDefault,
                                     shadowBoost = 0,
                                     shadowBoostMode = 0,
+                                    shadowBoostTint = 0,
+                                    highlightGuard = 0,
+                                    shadowBoostCustomPeak = 25,
+                                    shadowBoostCustomWidth = 3,
                                     monitorBrightness = origB,
                                     monitorContrast = origC
                                 };

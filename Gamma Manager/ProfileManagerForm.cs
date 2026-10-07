@@ -129,15 +129,33 @@ namespace Gamma_Manager
         {
             if (listProfiles.SelectedItems.Count == 0) return;
             var indices = listProfiles.SelectedIndices.Cast<int>().OrderBy(x => x).ToList();
-            if (indices[0] == 0) return;
+            bool allAtTop = true;
+            for (int i = 0; i < indices.Count; i++)
+            {
+                if (indices[i] != i) { allAtTop = false; break; }
+            }
+            if (allAtTop) return;
 
             listProfiles.BeginUpdate();
-            foreach (int index in indices)
+            var newIndices = new List<int>();
+            for (int i = 0; i < indices.Count; i++)
             {
-                object item = listProfiles.Items[index];
-                listProfiles.Items.RemoveAt(index);
-                listProfiles.Items.Insert(index - 1, item);
-                listProfiles.SetSelected(index - 1, true);
+                int curr = indices[i];
+                if (curr == 0 || (i > 0 && curr - 1 == newIndices[i - 1]))
+                {
+                    newIndices.Add(curr);
+                    continue;
+                }
+
+                object item = listProfiles.Items[curr];
+                listProfiles.Items.RemoveAt(curr);
+                listProfiles.Items.Insert(curr - 1, item);
+                newIndices.Add(curr - 1);
+            }
+            listProfiles.ClearSelected();
+            foreach (int idx in newIndices)
+            {
+                listProfiles.SetSelected(idx, true);
             }
             listProfiles.EndUpdate();
             changed = true;
@@ -147,15 +165,34 @@ namespace Gamma_Manager
         {
             if (listProfiles.SelectedItems.Count == 0) return;
             var indices = listProfiles.SelectedIndices.Cast<int>().OrderByDescending(x => x).ToList();
-            if (indices[0] == listProfiles.Items.Count - 1) return;
+            int maxIdx = listProfiles.Items.Count - 1;
+            bool allAtBottom = true;
+            for (int i = 0; i < indices.Count; i++)
+            {
+                if (indices[i] != maxIdx - i) { allAtBottom = false; break; }
+            }
+            if (allAtBottom) return;
 
             listProfiles.BeginUpdate();
-            foreach (int index in indices)
+            var newIndices = new List<int>();
+            for (int i = 0; i < indices.Count; i++)
             {
-                object item = listProfiles.Items[index];
-                listProfiles.Items.RemoveAt(index);
-                listProfiles.Items.Insert(index + 1, item);
-                listProfiles.SetSelected(index + 1, true);
+                int curr = indices[i];
+                if (curr == maxIdx || (i > 0 && curr + 1 == newIndices[i - 1]))
+                {
+                    newIndices.Add(curr);
+                    continue;
+                }
+
+                object item = listProfiles.Items[curr];
+                listProfiles.Items.RemoveAt(curr);
+                listProfiles.Items.Insert(curr + 1, item);
+                newIndices.Add(curr + 1);
+            }
+            listProfiles.ClearSelected();
+            foreach (int idx in newIndices)
+            {
+                listProfiles.SetSelected(idx, true);
             }
             listProfiles.EndUpdate();
             changed = true;
@@ -296,7 +333,7 @@ namespace Gamma_Manager
             }
 
             string p = listProfiles.SelectedItem.ToString();
-            string raw = string.Join("|", "TGM-Profile", "v1.5.5", EscapeField(p),
+            string raw = string.Join("|", "TGM-Profile", "v1.5.6", EscapeField(p),
                 EscapeField(iniFile.Read("monitor", p)),
                 EscapeField(iniFile.Read("hardwareId", p)),
                 EscapeField(iniFile.Read("monitorKey", p)),
@@ -313,7 +350,11 @@ namespace Gamma_Manager
                 EscapeField(iniFile.Read("monitorBrightness", p)),
                 EscapeField(iniFile.Read("monitorContrast", p)),
                 EscapeField(iniFile.Read("shadowBoost", p)),
-                EscapeField(iniFile.Read("shadowBoostMode", p))
+                EscapeField(iniFile.Read("shadowBoostMode", p)),
+                EscapeField(iniFile.Read("shadowBoostTint", p)),
+                EscapeField(iniFile.Read("highlightGuard", p)),
+                EscapeField(iniFile.Read("shadowBoostCustomPeak", p)),
+                EscapeField(iniFile.Read("shadowBoostCustomWidth", p))
             );
 
             string b64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(raw));
@@ -353,22 +394,24 @@ namespace Gamma_Manager
                 if (parts.Length < 16 || parts[0] != "TGM-Profile")
                     throw new FormatException("Invalid header format");
 
+                // v1.5.6   : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
                 // v1.5.5   : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
                 // v1.5.4   : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
                 // v1.5.3-2 : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
                 // v1.5.3   : monitor | hardwareId | gamma/contrast/bright...              (offset=1)
                 // legacy   : gamma/contrast/bright...                                      (offset=0)
-                bool isV155 = string.Equals(parts[1], "v1.5.5", StringComparison.OrdinalIgnoreCase);
-                bool isV154 = !isV155 && string.Equals(parts[1], "v1.5.4", StringComparison.OrdinalIgnoreCase);
-                bool isV1532 = !isV155 && !isV154 && string.Equals(parts[1], "v1.5.3-2", StringComparison.OrdinalIgnoreCase);
-                bool isV153 = !isV155 && !isV154 && !isV1532 && string.Equals(parts[1], "v1.5.3", StringComparison.OrdinalIgnoreCase);
+                bool isV156 = string.Equals(parts[1], "v1.5.6", StringComparison.OrdinalIgnoreCase);
+                bool isV155 = !isV156 && string.Equals(parts[1], "v1.5.5", StringComparison.OrdinalIgnoreCase);
+                bool isV154 = !isV156 && !isV155 && string.Equals(parts[1], "v1.5.4", StringComparison.OrdinalIgnoreCase);
+                bool isV1532 = !isV156 && !isV155 && !isV154 && string.Equals(parts[1], "v1.5.3-2", StringComparison.OrdinalIgnoreCase);
+                bool isV153 = !isV156 && !isV155 && !isV154 && !isV1532 && string.Equals(parts[1], "v1.5.3", StringComparison.OrdinalIgnoreCase);
 
-                if ((isV155 || isV154 || isV1532) && parts.Length < 18)
+                if ((isV156 || isV155 || isV154 || isV1532) && parts.Length < 18)
                     throw new FormatException("Incomplete profile format");
                 if (isV153 && parts.Length < 17)
                     throw new FormatException("Incomplete v1.5.3 profile format");
 
-                int offset = (isV155 || isV154 || isV1532) ? 2 : (isV153 ? 1 : 0);
+                int offset = (isV156 || isV155 || isV154 || isV1532) ? 2 : (isV153 ? 1 : 0);
                 string originalName = UnescapeField(parts[2]).Trim();
                 int colonIdx = originalName.IndexOf(':');
                 if (colonIdx >= 0)
@@ -422,13 +465,13 @@ namespace Gamma_Manager
                 {
                     // 모니터 목록을 전달받지 못한 경우 공유 코드 원본 모니터 정보로 저장 (Fallback)
                     iniFile.Write("monitor", UnescapeField(parts[3]), fullProfileName);
-                    if (isV155 || isV154 || isV1532 || isV153)
+                    if (isV156 || isV155 || isV154 || isV1532 || isV153)
                     {
                         string hwId = UnescapeField(parts[4]);
                         if (!string.IsNullOrEmpty(hwId))
                             iniFile.Write("hardwareId", hwId, fullProfileName);
                     }
-                    if (isV155 || isV154 || isV1532)
+                    if (isV156 || isV155 || isV154 || isV1532)
                     {
                         string mk = UnescapeField(parts[5]);
                         if (!string.IsNullOrEmpty(mk))
@@ -464,6 +507,36 @@ namespace Gamma_Manager
                 }
                 iniFile.Write("shadowBoost", sbVal, fullProfileName);
                 iniFile.Write("shadowBoostMode", sbmVal, fullProfileName);
+
+                // v1.5.6 고도화 블랙 EQ 파라미터 (틴트, 눈부심 방지 가드, 커스텀 피크/대역폭)
+                string sbtVal = "0";
+                string hgVal = "0";
+                string peakVal = "25";
+                string widthVal = "3";
+                if (parts.Length > 18 + offset)
+                {
+                    string rawSbt = UnescapeField(parts[18 + offset]);
+                    if (!string.IsNullOrEmpty(rawSbt)) sbtVal = rawSbt;
+                }
+                if (parts.Length > 19 + offset)
+                {
+                    string rawHg = UnescapeField(parts[19 + offset]);
+                    if (!string.IsNullOrEmpty(rawHg)) hgVal = rawHg;
+                }
+                if (parts.Length > 20 + offset)
+                {
+                    string rawPeak = UnescapeField(parts[20 + offset]);
+                    if (!string.IsNullOrEmpty(rawPeak)) peakVal = rawPeak;
+                }
+                if (parts.Length > 21 + offset)
+                {
+                    string rawWidth = UnescapeField(parts[21 + offset]);
+                    if (!string.IsNullOrEmpty(rawWidth)) widthVal = rawWidth;
+                }
+                iniFile.Write("shadowBoostTint", sbtVal, fullProfileName);
+                iniFile.Write("highlightGuard", hgVal, fullProfileName);
+                iniFile.Write("shadowBoostCustomPeak", peakVal, fullProfileName);
+                iniFile.Write("shadowBoostCustomWidth", widthVal, fullProfileName);
 
                 changed = true;
                 LoadProfiles();

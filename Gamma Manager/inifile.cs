@@ -24,6 +24,7 @@ namespace Gamma_Manager
         private readonly object _fileIOLock = new object();
         private bool isDirty = false;
         private CancellationTokenSource _saveCts = null;
+        private int _consecutiveSaveFailures = 0;
 
         public IniFile(string IniPath = null)
         {
@@ -204,6 +205,7 @@ namespace Gamma_Manager
                             }
                         }
 
+                        _consecutiveSaveFailures = 0;
                         break;
                     }
                     catch (Exception ex)
@@ -214,6 +216,10 @@ namespace Gamma_Manager
                         {
                             Logger.Error("Failed to save INI file atomically to disk after 3 attempts.", ex);
                             lock (fileLock) { isDirty = true; }
+                            if (Interlocked.Increment(ref _consecutiveSaveFailures) <= 3)
+                            {
+                                Task.Delay(1000).ContinueWith(_ => QueueSave());
+                            }
                         }
                         else
                         {

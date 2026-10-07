@@ -68,19 +68,6 @@ namespace Gamma_Manager
 
                     await Task.Run(() =>
                     {
-                        var oldDisplays = displays;
-                        if (oldDisplays != null)
-                        {
-                            if (displayService != null)
-                            {
-                                lock (displayService.ApplyLock) { Display.ReleasePhysicalMonitorHandles(oldDisplays); }
-                            }
-                            else
-                            {
-                                Display.ReleasePhysicalMonitorHandles(oldDisplays);
-                            }
-                        }
-
                         if (token.IsCancellationRequested || isClosing || IsDisposed) return;
 
                         freshDisplays = Display.QueryDisplayDevices();
@@ -96,9 +83,64 @@ namespace Gamma_Manager
 
                     Action updateUI = () =>
                     {
-                        if (isClosing || IsDisposed) return;
+                        if (isClosing || IsDisposed)
+                        {
+                            if (freshDisplays != null) Display.ReleasePhysicalMonitorHandles(freshDisplays);
+                            return;
+                        }
 
+                        var oldDisplays = displays;
                         displays = freshDisplays ?? new List<Display.DisplayInfo>();
+
+                        // 👈 기존 모니터 설정값(감마, 채도, 밝기/대비, 섀도우부스트 등)을 새 목록에 보존 및 인계
+                        if (oldDisplays != null && oldDisplays.Count > 0)
+                        {
+                            foreach (var fresh in displays)
+                            {
+                                if (fresh == null) continue;
+                                string freshKey = DisplayService.GetMonitorKey(fresh);
+                                var matchedOld = oldDisplays.Find(o => o != null && string.Equals(DisplayService.GetMonitorKey(o), freshKey, StringComparison.OrdinalIgnoreCase));
+                                if (matchedOld != null)
+                                {
+                                    fresh.rGamma = matchedOld.rGamma;
+                                    fresh.gGamma = matchedOld.gGamma;
+                                    fresh.bGamma = matchedOld.bGamma;
+                                    fresh.rContrast = matchedOld.rContrast;
+                                    fresh.gContrast = matchedOld.gContrast;
+                                    fresh.bContrast = matchedOld.bContrast;
+                                    fresh.rBright = matchedOld.rBright;
+                                    fresh.gBright = matchedOld.gBright;
+                                    fresh.bBright = matchedOld.bBright;
+
+                                    if (fresh.saturationSupported)
+                                    {
+                                        fresh.saturation = Clamp(matchedOld.saturation, fresh.saturationMin, fresh.saturationMax);
+                                    }
+
+                                    fresh.shadowBoost = matchedOld.shadowBoost;
+                                    fresh.shadowBoostMode = matchedOld.shadowBoostMode;
+                                    fresh.shadowBoostTint = matchedOld.shadowBoostTint;
+                                    fresh.highlightGuard = matchedOld.highlightGuard;
+                                    fresh.shadowBoostCustomPeak = matchedOld.shadowBoostCustomPeak;
+                                    fresh.shadowBoostCustomWidth = matchedOld.shadowBoostCustomWidth;
+
+                                    fresh.monitorBrightness = matchedOld.monitorBrightness;
+                                    fresh.monitorContrast = matchedOld.monitorContrast;
+                                }
+                            }
+                        }
+
+                        if (oldDisplays != null)
+                        {
+                            if (displayService != null)
+                            {
+                                lock (displayService.ApplyLock) { Display.ReleasePhysicalMonitorHandles(oldDisplays); }
+                            }
+                            else
+                            {
+                                Display.ReleasePhysicalMonitorHandles(oldDisplays);
+                            }
+                        }
                         comboBoxMonitors.Items.Clear();
                         for (int i = 0; i < displays.Count; i++)
                         {
@@ -121,8 +163,35 @@ namespace Gamma_Manager
                             comboBoxMonitors.SelectedIndex = targetIndex;
 
                             fillInfo(currDisplay);
-                            if (currDisplay.saturationSupported) Saturation.Apply(currDisplay, currDisplay.saturation);
                             initPresets();
+
+                            // 👈 디스플레이 복구 시 모든 모니터의 감마 및 채도를 즉시 재적용
+                            foreach (var disp in displays)
+                            {
+                                if (disp == null) continue;
+
+                                if (displayService != null && !string.IsNullOrEmpty(disp.displayLink))
+                                {
+                                    lock (displayService.SoftwareLock)
+                                    {
+                                        Gamma.SetGammaRamp(disp.displayLink, Gamma.CreateGammaRamp(
+                                            disp.rGamma, disp.gGamma, disp.bGamma,
+                                            disp.rContrast, disp.gContrast, disp.bContrast,
+                                            disp.rBright, disp.gBright, disp.bBright,
+                                            disp.shadowBoost, disp.shadowBoostMode,
+                                            disp.shadowBoostTint, disp.highlightGuard,
+                                            disp.shadowBoostCustomPeak, disp.shadowBoostCustomWidth));
+                                    }
+                                }
+
+                                if (disp.saturationSupported)
+                                {
+                                    Saturation.Apply(disp, disp.saturation);
+                                }
+                            }
+
+                            string currentPreset = GetCurrentPresetForMonitor(DisplayService.GetMonitorKey(currDisplay));
+                            SyncUIWithTargetMonitorAndPreset(currDisplay, currentPreset);
                         }
                         else
                         {
@@ -132,7 +201,7 @@ namespace Gamma_Manager
 
                         initTrayMenu();
                         RefreshGlobalHotkeys();
-                        Logger.Info("Displays re-enumerated successfully.");
+                        Logger.Info("Displays re-enumerated successfully and display states restored.");
                     };
 
                     if (InvokeRequired) BeginInvoke(updateUI);
@@ -179,6 +248,7 @@ namespace Gamma_Manager
             CancelPendingHardwareRead();
             CleanupGameAutoHook();
             UnregisterSystemEvents();
+            Activated -= Window_Activated;
             RestoreVolumeIfDucked();
 
             displayService?.InvalidateAllGenerations();
@@ -310,6 +380,20 @@ namespace Gamma_Manager
             }
             Activate();
             BringToFront();
+
+            if (currDisplay != null && currDisplay.saturationSupported)
+            {
+                Saturation.Apply(currDisplay, currDisplay.saturation);
+            }
+        }
+
+        private void Window_Activated(object sender, EventArgs e)
+        {
+            if (isClosing || IsDisposed || currDisplay == null) return;
+            if (currDisplay.saturationSupported)
+            {
+                Saturation.Apply(currDisplay, currDisplay.saturation);
+            }
         }
 
         private void notifyIcon_MouseDoubleClick(object sender, MouseEventArgs e)

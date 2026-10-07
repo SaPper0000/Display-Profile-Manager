@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-// Assembly metadata for Display Profile Manager v1.5.5
+// Assembly metadata for Display Profile Manager v1.5.6
 [assembly: AssemblyTitle("Display Profile Manager")]
 [assembly: AssemblyDescription("Display profile and color control utility")]
 [assembly: AssemblyConfiguration("Release 1.5")]
@@ -19,5 +19,5 @@ using System.Runtime.InteropServices;
 [assembly: Guid("2efc2fc6-5d10-40ca-b41c-2e5084ad03a1")]
 
 // Assembly version information.
-[assembly: AssemblyVersion("1.5.5.0")]
-[assembly: AssemblyFileVersion("1.5.5.0")]
+[assembly: AssemblyVersion("1.5.6.0")]
+[assembly: AssemblyFileVersion("1.5.6.0")]

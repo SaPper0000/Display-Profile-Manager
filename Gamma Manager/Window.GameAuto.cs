@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace Gamma_Manager
@@ -37,7 +38,7 @@ namespace Gamma_Manager
         private readonly Dictionary<string, string> gameAutoPreviousPresetByMonitor = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MonitorStateSnapshot> gameAutoPreviousStateByMonitor = new Dictionary<string, MonitorStateSnapshot>(StringComparer.OrdinalIgnoreCase);
         private bool gameAutoPreviousStateCaptured = false;
-        private bool gameAutoEvaluationPending = false;
+        private int gameAutoEvaluationPending = 0;
 
         public void SetupGameAutoHook()
         {
@@ -135,23 +136,29 @@ namespace Gamma_Manager
             if (hwnd == lastForegroundHwnd && hwnd != IntPtr.Zero) return;
             lastForegroundHwnd = hwnd;
 
-            if (gameAutoEvaluationPending || isClosing || IsDisposed || !IsHandleCreated) return;
-            gameAutoEvaluationPending = true;
+            if (isClosing || IsDisposed || !IsHandleCreated) return;
+            if (Interlocked.CompareExchange(ref gameAutoEvaluationPending, 1, 0) != 0) return;
 
             try
             {
                 BeginInvoke((MethodInvoker)delegate
                 {
-                    gameAutoEvaluationPending = false;
-                    if (!isClosing && !IsDisposed)
+                    try
                     {
-                        EvaluateGameAutoState();
+                        if (!isClosing && !IsDisposed)
+                        {
+                            EvaluateGameAutoState();
+                        }
+                    }
+                    finally
+                    {
+                        Interlocked.Exchange(ref gameAutoEvaluationPending, 0);
                     }
                 });
             }
             catch
             {
-                gameAutoEvaluationPending = false;
+                Interlocked.Exchange(ref gameAutoEvaluationPending, 0);
             }
         }
 

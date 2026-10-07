@@ -657,12 +657,29 @@ namespace Gamma_Manager
                             {
                                 conflictName = ko ? "프로필 순환" : "Cycle Profiles";
                             }
+                            else if (hkName == HotkeySettingsForm.SCREENSHOT_PRESET)
+                            {
+                                conflictName = ko ? "화면 필터 스크린샷" : "Filtered Screenshot";
+                            }
                             else
                             {
                                 conflictName = hkName;
                             }
                             break;
                         }
+                    }
+                }
+            }
+
+            // [Screenshot] 섹션의 단축키와도 교차 검사
+            if (string.IsNullOrEmpty(conflictName))
+            {
+                string scHkText = ScreenshotManager.GetHotkey(ini);
+                if (TryParseHotkey(scHkText, out Keys scKey, out GlobalHotkey.Modifiers scMod))
+                {
+                    if (scKey == e.KeyCode && scMod == mods)
+                    {
+                        conflictName = ko ? "화면 필터 스크린샷" : "Filtered Screenshot";
                     }
                 }
             }

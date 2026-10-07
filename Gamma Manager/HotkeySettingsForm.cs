@@ -35,6 +35,7 @@ namespace Gamma_Manager
         internal bool ChangesSaved { get; private set; }
 
         public const string HARD_RESET_ALL_PRESET = "__HARD_RESET_ALL__";
+        public const string SCREENSHOT_PRESET = "__SCREENSHOT__";
         public const string HARD_RESET_SINGLE_PREFIX = "__HARD_RESET_";
         public const string CYCLE_SINGLE_PREFIX = "__CYCLE_";
 
@@ -140,6 +141,9 @@ namespace Gamma_Manager
             // 1. 전체 초기화 핫키
             AddSpecialRow(HARD_RESET_ALL_PRESET, LanguageManager.Korean ? "🔄 모든 디스플레이 초기화" : "🔄 Reset All Displays", false);
 
+            // 1-1. 화면 필터 스크린샷 핫키
+            AddSpecialRow(SCREENSHOT_PRESET, LanguageManager.Korean ? "📸 화면 필터 스크린샷" : "📸 Filtered Screenshot", false);
+
             if (displays != null)
             {
                 // 2. 모니터별 초기화 & 순환 핫키
@@ -187,6 +191,8 @@ namespace Gamma_Manager
             string storedHotkey = iniFile.Read(presetName, "Hotkeys");
             if (string.IsNullOrEmpty(storedHotkey) && !string.IsNullOrEmpty(legacyPresetName))
                 storedHotkey = iniFile.Read(legacyPresetName, "Hotkeys");
+            if (string.IsNullOrEmpty(storedHotkey) && presetName == SCREENSHOT_PRESET)
+                storedHotkey = ScreenshotManager.GetHotkey(iniFile);
             TryParseHotkey(storedHotkey, out Keys key, out GlobalHotkey.Modifiers modifiers);
             Row row = new Row { Preset = presetName, LegacyPreset = legacyPresetName, SetButton = setButton, ClearButton = clearButton, ModeCombo = null, CycleCheck = null, Key = key, Modifiers = modifiers };
             rows.Add(row); UpdateButton(row);
@@ -285,7 +291,18 @@ namespace Gamma_Manager
                 Row conflict = rows.Find(r => r != row && r.Key == e.KeyCode && r.Modifiers == modifiers);
                 if (conflict != null)
                 {
-                    string conflictName = conflict.Preset;
+                    string conflictName;
+                    if (conflict.Preset == SCREENSHOT_PRESET)
+                        conflictName = LanguageManager.Korean ? "화면 필터 스크린샷" : "Filtered Screenshot";
+                    else if (conflict.Preset == HARD_RESET_ALL_PRESET)
+                        conflictName = LanguageManager.Korean ? "모든 디스플레이 초기화" : "Reset All Displays";
+                    else if (conflict.Preset.StartsWith(HARD_RESET_SINGLE_PREFIX, StringComparison.OrdinalIgnoreCase))
+                        conflictName = LanguageManager.Korean ? "모니터 초기화" : "Reset Monitor";
+                    else if (conflict.Preset.StartsWith(CYCLE_SINGLE_PREFIX, StringComparison.OrdinalIgnoreCase))
+                        conflictName = LanguageManager.Korean ? "프로필 순환" : "Cycle Profiles";
+                    else
+                        conflictName = conflict.Preset;
+
                     DialogResult result = MessageBox.Show(
                         LanguageManager.Korean ? $"이 핫키는 [{conflictName}]에 지정되어 있습니다.\r\n변경하시겠습니까?" : $"Hotkey in use by [{conflictName}]. Change it?",
                         LanguageManager.Korean ? "핫키 중복" : "Duplicate", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
@@ -354,6 +371,11 @@ namespace Gamma_Manager
                 if (row.CycleCheck != null)
                 {
                     iniFile.Write("CycleInclude", row.CycleCheck.Checked ? "1" : "0", row.Preset);
+                }
+
+                if (row.Preset == SCREENSHOT_PRESET)
+                {
+                    ScreenshotManager.SetHotkey(iniFile, value);
                 }
             }
             ChangesSaved = true; DialogResult = DialogResult.OK; Close();

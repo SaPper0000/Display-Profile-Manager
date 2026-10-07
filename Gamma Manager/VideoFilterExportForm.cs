@@ -23,6 +23,10 @@ namespace Gamma_Manager
             public int Saturation;
             public int ShadowBoost;
             public int ShadowBoostMode;
+            public int ShadowBoostTint;
+            public int HighlightGuard;
+            public int CustomPeak;
+            public int CustomWidth;
 
             public float AvgGamma => (rGamma + gGamma + bGamma) / 3.0f;
             public float AvgContrast => (rContrast + gContrast + bContrast) / 3.0f;
@@ -65,7 +69,7 @@ namespace Gamma_Manager
             initialProfile = string.IsNullOrEmpty(activeProfile) ? "Default" : activeProfile;
             ko = LanguageManager.Korean;
 
-            Text = ko ? "동영상 프로필 필터 적용 (.bat)" : "Apply Video Profile Filter (.bat)";
+            Text = ko ? "동영상/이미지 프로필 필터 적용 (.bat)" : "Apply Video/Image Profile Filter (.bat)";
             ClientSize = new Size(590, 610);
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -109,8 +113,8 @@ namespace Gamma_Manager
             if (IsFfmpegInstalled() || isDownloadingFfmpeg) return;
 
             string prompt = ko
-                ? "동영상에 프로필 필터를 입히려면 영상 처리 엔진(FFmpeg)이 필요합니다.\r\n현재 컴퓨터에 FFmpeg 엔진이 설치되어 있지 않습니다.\r\n\r\n지금 공식 사이트에서 자동으로 다운로드하여 설치하시겠습니까? (최초 1회만 필요)"
-                : "The video processing engine (FFmpeg) is required to apply profile filters.\r\nFFmpeg is not currently installed.\r\n\r\nWould you like to download and install it now from the official source? (Required once)";
+                ? "동영상 및 이미지에 프로필 필터를 입히려면 미디어 처리 엔진(FFmpeg)이 필요합니다.\r\n현재 컴퓨터에 FFmpeg 엔진이 설치되어 있지 않습니다.\r\n\r\n지금 공식 사이트에서 자동으로 다운로드하여 설치하시겠습니까? (최초 1회만 필요)"
+                : "The media processing engine (FFmpeg) is required to apply profile filters.\r\nFFmpeg is not currently installed.\r\n\r\nWould you like to download and install it now from the official source? (Required once)";
 
             DialogResult dr = MessageBox.Show(
                 this,
@@ -134,7 +138,7 @@ namespace Gamma_Manager
             // 1. 헤더 타이틀
             Label lblTitle = new Label
             {
-                Text = ko ? "동영상 프로필 색감 필터 적용 (.bat)" : "Apply Display Profile Filter to Video (.bat)",
+                Text = ko ? "동영상/이미지 프로필 색감 필터 적용 (.bat)" : "Apply Display Profile Filter to Video/Image (.bat)",
                 Font = new Font("Segoe UI", 12f, FontStyle.Bold),
                 Location = new Point(margin, 16),
                 AutoSize = true
@@ -155,8 +159,8 @@ namespace Gamma_Manager
             Label lblDesc = new Label
             {
                 Text = ko
-                    ? "선택한 모니터/프로필의 색감(감마/대비/밝기/채도/블랙 EQ)을 동영상에 그대로 입혀주는\r\n'마우스 드래그 앤 드롭' 전용 필터 적용 배치 파일(.bat)을 생성합니다."
-                    : "Generates a drag-and-drop batch file (.bat) that applies your selected\r\nmonitor & profile (Gamma, Contrast, Brightness, Saturation, Black EQ) to videos.",
+                    ? "선택한 모니터/프로필의 색감(감마/대비/밝기/채도/블랙 EQ)을 동영상 및 이미지(스크린샷)에 그대로 입혀주는\r\n'마우스 드래그 앤 드롭' 전용 필터 적용 배치 파일(.bat)을 생성합니다."
+                    : "Generates a drag-and-drop batch file (.bat) that applies your selected\r\nmonitor & profile (Gamma, Contrast, Brightness, Saturation, Black EQ) to videos and images.",
                 Font = new Font("Segoe UI", 9f),
                 Location = new Point(margin, 46),
                 Size = new Size(contentW, 36),
@@ -371,7 +375,7 @@ namespace Gamma_Manager
 
             checkGenerateLut = new CheckBox
             {
-                Text = ko ? "3D LUT (.cube) 파일 함께 생성 (블랙 EQ & RGB 색감 100% 반영) [권장]" : "Also generate 3D LUT (.cube) (Full Black EQ & RGB) [Recommended]",
+                Text = ko ? "3D LUT 색감 보정 사용 (블랙 EQ & 정밀 RGB 100% 반영) [권장]" : "Use 3D LUT Color Engine (Full Black EQ & RGB) [Recommended]",
                 Location = new Point(210, 126),
                 Size = new Size(335, 23),
                 Checked = true,
@@ -381,10 +385,10 @@ namespace Gamma_Manager
 
             Controls.Add(grpSettings);
 
-            // 4. 영상 처리 엔진 (FFmpeg) 상태 및 원클릭 다운로드 그룹
+            // 4. 미디어 처리 엔진 (FFmpeg) 상태 및 원클릭 다운로드 그룹
             grpFfmpeg = new GroupBox
             {
-                Text = ko ? "영상 처리 엔진 (FFmpeg) 상태" : "Video Engine (FFmpeg) Status",
+                Text = ko ? "미디어 처리 엔진 (FFmpeg) 상태" : "Media Engine (FFmpeg) Status",
                 Location = new Point(margin, 456),
                 Size = new Size(contentW, 78),
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold)
@@ -577,7 +581,11 @@ namespace Gamma_Manager
                     bBright = currentSelectedDisplay != null ? currentSelectedDisplay.bBright : 0.0f,
                     Saturation = currentSelectedDisplay != null && currentSelectedDisplay.saturationSupported ? currentSelectedDisplay.saturation : 100,
                     ShadowBoost = currentSelectedDisplay != null ? currentSelectedDisplay.shadowBoost : 0,
-                    ShadowBoostMode = currentSelectedDisplay != null ? currentSelectedDisplay.shadowBoostMode : 0
+                    ShadowBoostMode = currentSelectedDisplay != null ? currentSelectedDisplay.shadowBoostMode : 0,
+                    ShadowBoostTint = currentSelectedDisplay != null ? currentSelectedDisplay.shadowBoostTint : 0,
+                    HighlightGuard = currentSelectedDisplay != null ? currentSelectedDisplay.highlightGuard : 0,
+                    CustomPeak = currentSelectedDisplay != null ? currentSelectedDisplay.shadowBoostCustomPeak : 25,
+                    CustomWidth = currentSelectedDisplay != null ? currentSelectedDisplay.shadowBoostCustomWidth : 3
                 };
             }
             else
@@ -606,9 +614,9 @@ namespace Gamma_Manager
 
             lblInfo.Text = infoText1 + "\r\n" + infoText2;
 
-            // 파일명 제안 업데이트
+            // 파일명 제안 업데이트 (FFmpeg 필터그래프 호환을 위해 대괄호 제외)
             string safeName = MakeSafeFileName(friendlyName);
-            textFileName.Text = ko ? $"[필터_{safeName}].bat" : $"[Filter_{safeName}].bat";
+            textFileName.Text = ko ? $"필터_{safeName}.bat" : $"Filter_{safeName}.bat";
         }
 
         private static string GetFriendlyProfileName(string name)
@@ -635,7 +643,11 @@ namespace Gamma_Manager
                 rBright = 0.0f, gBright = 0.0f, bBright = 0.0f,
                 Saturation = 100,
                 ShadowBoost = 0,
-                ShadowBoostMode = 0
+                ShadowBoostMode = 0,
+                ShadowBoostTint = 0,
+                HighlightGuard = 0,
+                CustomPeak = 25,
+                CustomWidth = 3
             };
 
             if (iniFile == null) return data;
@@ -684,7 +696,19 @@ namespace Gamma_Manager
                 data.ShadowBoost = Math.Max(0, Math.Min(100, sb));
 
             if (int.TryParse(iniFile.Read("shadowBoostMode", actualSection), out int sbm))
-                data.ShadowBoostMode = Math.Max(0, Math.Min(2, sbm));
+                data.ShadowBoostMode = Math.Max(0, Math.Min(4, sbm));
+
+            if (int.TryParse(iniFile.Read("shadowBoostTint", actualSection), out int sbt))
+                data.ShadowBoostTint = Math.Max(0, Math.Min(2, sbt));
+
+            if (int.TryParse(iniFile.Read("highlightGuard", actualSection), out int hg))
+                data.HighlightGuard = Math.Max(0, Math.Min(100, hg));
+
+            if (int.TryParse(iniFile.Read("shadowBoostCustomPeak", actualSection), out int peak))
+                data.CustomPeak = Math.Max(10, Math.Min(40, peak));
+
+            if (int.TryParse(iniFile.Read("shadowBoostCustomWidth", actualSection), out int width))
+                data.CustomWidth = Math.Max(1, Math.Min(5, width));
 
             return data;
         }
@@ -705,49 +729,64 @@ namespace Gamma_Manager
         private static string MakeSafeFileName(string name)
         {
             if (string.IsNullOrEmpty(name)) return "Default";
+            string s = name.Replace('[', '_').Replace(']', '_')
+                           .Replace('\'', '_').Replace('\"', '_')
+                           .Replace(';', '_').Replace(',', '_')
+                           .Replace('!', '_').Replace('%', '_')
+                           .Replace('&', '_').Replace('^', '_');
             foreach (char c in Path.GetInvalidFileNameChars())
             {
-                name = name.Replace(c, '_');
+                s = s.Replace(c, '_');
             }
-            return name.Trim();
+            return s.Trim();
         }
 
         private void ShowUsageHelp()
         {
-            string title = ko ? "📖 동영상 프로필 필터 사용법 안내" : "📖 Video Profile Filter Usage Guide";
+            string title = ko ? "📖 동영상/이미지 프로필 필터 사용법 안내" : "📖 Video/Image Profile Filter Usage Guide";
             string helpText = ko
-                ? "【 초간단 동영상 프로필 필터 적용 사용법 】\r\n\r\n" +
+                ? "【 초간단 동영상 및 이미지 프로필 필터 적용 사용법 】\r\n\r\n" +
                   "1. 모니터 및 프로필 선택\r\n" +
-                  "   - 상단에서 적용할 모니터를 고르고, 영상에 입히고 싶은 색감 프로필을 선택합니다.\r\n" +
+                  "   - 상단에서 적용할 모니터를 고르고, 파일에 입히고 싶은 색감 프로필을 선택합니다.\r\n" +
                   "   - 실시간 화면 설정 또는 저장된 프리셋(감마, 대비, 밝기, 채도, 블랙 EQ)이 그대로 적용됩니다.\r\n\r\n" +
                   "2. 필터 파일(.bat) 생성\r\n" +
                   "   - 저장 폴더(기본값: 바탕화면)를 확인하고 [🎬 필터 적용 (.bat) 생성] 버튼을 누릅니다.\r\n" +
-                  "   - 대상 폴더에 [필터_프로필명].bat 배치 파일과 3D LUT 파일이 생성됩니다.\r\n\r\n" +
-                  "3. 동영상 파일 마우스 드래그 & 드롭 (핵심)\r\n" +
-                  "   - 아웃플레이어, 쉐도우플레이, 메달TV, OBS 등으로 녹화된 영상 파일을 마우스로 끌어서\r\n" +
+                  "   - 바탕화면에는 깔끔하게 [필터_프로필명.bat] 단일 실행 파일만 생성됩니다!\r\n" +
+                  "     (3D 색상표 데이터는 전용 시스템 폴더에 안전하게 자동 보관되어 바탕화면을 어지럽히지 않습니다)\r\n\r\n" +
+                  "3. 동영상 또는 이미지 파일 마우스 드래그 & 드롭 (핵심)\r\n" +
+                  "   - 동영상(.mp4, .mkv, .mov 등)이나 이미지/스크린샷(.jpg, .png, .bmp, .webp 등)을 마우스로 끌어서\r\n" +
                   "     생성된 .bat 파일 아이콘 위에 놓아주세요.\r\n" +
-                  "   - 여러 개의 영상을 한꺼번에 선택하여 던져도 순서대로 자동 적용됩니다!\r\n\r\n" +
-                  "4. 결과물 확인 (원본 동영상 포맷 100% 유지)\r\n" +
-                  "   - 원본 영상이 있던 폴더에 '[원본이름]_밝게.확장자'(mp4, mkv, mov 등 원본 포맷 유지)로 필터가 입혀져 즉시 생성됩니다.\r\n\r\n" +
-                  "5. 초고속 하드웨어 가속\r\n" +
-                  "   - 지포스(NVENC), 라데온(AMF), 인텔(QSV) 그래픽카드의 고속 인코딩 칩을 활용하여\r\n" +
-                  "     화질 손실 없이 초당 수백 프레임 속도로 초고속 완료됩니다!"
-                : "【 How to Use Video Profile Filter 】\r\n\r\n" +
+                  "   - 여러 개의 파일(영상+이미지 혼합 가능)을 한꺼번에 선택하여 던져도 순서대로 자동 적용됩니다!\r\n\r\n" +
+                  "4. 결과물 확인 (원본 포맷 및 초고화질 유지)\r\n" +
+                  "   - 이미지 파일은 0.1초 만에 무손실/초고화질로 즉시 필터가 입혀져 저장됩니다.\r\n" +
+                  "   - 동영상 파일은 원본 확장자(mp4, mkv, mov 등)를 유지하며 지포스/라데온/인텔 GPU 가속으로 초고속 인코딩됩니다."
+                : "【 How to Use Video/Image Profile Filter 】\r\n\r\n" +
                   "1. Select Monitor & Profile\r\n" +
                   "   - Select the target monitor, then pick the display profile to apply.\r\n" +
                   "   - Live settings or saved presets (Gamma, Contrast, Brightness, Saturation, Black EQ) are applied.\r\n\r\n" +
                   "2. Generate Filter File\r\n" +
-                  "   - Click [🎬 Generate Filter (.bat)] to create your filter batch file and 3D LUT.\r\n\r\n" +
-                  "3. Drag & Drop Videos\r\n" +
-                  "   - Simply drag your video files (.mp4, .mkv, .mov, etc.)\r\n" +
+                  "   - Click [🎬 Generate Filter (.bat)] to create your clean standalone filter .bat file.\r\n" +
+                  "     (3D LUT color tables are stored cleanly in the app data folder without cluttering your desktop)\r\n\r\n" +
+                  "3. Drag & Drop Videos or Images\r\n" +
+                  "   - Simply drag video files (.mp4, .mkv, etc.) or images (.jpg, .png, .webp, etc.)\r\n" +
                   "     and drop them onto the generated .bat file icon.\r\n" +
                   "   - Drag multiple files at once for sequential batch processing.\r\n\r\n" +
-                  "4. Output Video (Preserves Original Format)\r\n" +
-                  "   - Saved in the same directory as '[name]_bright.ext' (maintains .mp4, .mkv, .mov, etc.).\r\n\r\n" +
-                  "5. High Speed Hardware Acceleration\r\n" +
-                  "   - Uses NVIDIA NVENC, AMD AMF, Intel QSV for ultra-fast processing with zero quality loss!";
+                  "4. Output Media (Preserves Quality & Original Format)\r\n" +
+                  "   - Images are processed in 0.1s with maximum quality.\r\n" +
+                  "   - Videos are hardware accelerated via NVENC, AMF, or QSV with zero quality loss!";
 
             MessageBox.Show(this, helpText, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private static string GetGlobalLutDir()
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string lutDir = Path.Combine(localAppData, "DisplayProfileManager", "luts");
+            if (!Directory.Exists(lutDir))
+            {
+                try { Directory.CreateDirectory(lutDir); } catch { }
+            }
+            return lutDir;
         }
 
         private static string GetGlobalFfmpegDir()
@@ -928,6 +967,12 @@ namespace Gamma_Manager
 
                 await Task.Run(() =>
                 {
+                    string targetDir = Path.GetDirectoryName(targetExe);
+                    if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
+                    {
+                        Directory.CreateDirectory(targetDir);
+                    }
+
                     using (ZipArchive archive = ZipFile.OpenRead(tempZip))
                     {
                         foreach (ZipArchiveEntry entry in archive.Entries)
@@ -941,24 +986,30 @@ namespace Gamma_Manager
                     }
                 });
 
-                MessageBox.Show(
-                    this,
-                    ko ? "FFmpeg 엔진 다운로드 및 설치가 성공적으로 완료되었습니다!\r\n이제 동영상에 자유롭게 프로필 필터를 입힐 수 있습니다."
-                       : "FFmpeg engine has been successfully downloaded and installed!\r\nYou can now apply profile filters to videos.",
-                    ko ? "설치 완료" : "Installation Complete",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                if (!IsDisposed)
+                {
+                    MessageBox.Show(
+                        this,
+                        ko ? "FFmpeg 엔진 다운로드 및 설치가 성공적으로 완료되었습니다!\r\n이제 동영상에 자유롭게 프로필 필터를 입힐 수 있습니다."
+                           : "FFmpeg engine has been successfully downloaded and installed!\r\nYou can now apply profile filters to videos.",
+                        ko ? "설치 완료" : "Installation Complete",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
 
                 return true;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    this,
-                    (ko ? "다운로드 중 오류가 발생했습니다:\r\n" : "Download error:\r\n") + ex.Message,
-                    ko ? "다운로드 실패" : "Download Failed",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                if (!IsDisposed)
+                {
+                    MessageBox.Show(
+                        this,
+                        (ko ? "다운로드 중 오류가 발생했습니다:\r\n" : "Download error:\r\n") + ex.Message,
+                        ko ? "다운로드 실패" : "Download Failed",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }
                 return false;
             }
             finally
@@ -970,8 +1021,11 @@ namespace Gamma_Manager
                 catch { }
 
                 isDownloadingFfmpeg = false;
-                btnGenerate.Enabled = true;
-                RefreshFfmpegStatus();
+                if (!IsDisposed)
+                {
+                    btnGenerate.Enabled = true;
+                    RefreshFfmpegStatus();
+                }
             }
         }
 
@@ -1014,7 +1068,7 @@ namespace Gamma_Manager
             string fileName = textFileName.Text.Trim();
             if (string.IsNullOrEmpty(fileName))
             {
-                fileName = $"[필터_{MakeSafeFileName(currentProfileData.Name)}].bat";
+                fileName = $"필터_{MakeSafeFileName(currentProfileData.Name)}.bat";
             }
             if (!fileName.EndsWith(".bat", StringComparison.OrdinalIgnoreCase))
             {
@@ -1022,9 +1076,12 @@ namespace Gamma_Manager
             }
 
             string batPath = Path.Combine(outDir, fileName);
-            string baseFileNameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+            // FFmpeg filtergraph 파서 호환을 위해 .cube 파일명에서는 대괄호 및 따옴표 완전 제거
+            string baseFileNameWithoutExt = Path.GetFileNameWithoutExtension(fileName).Replace("[", "_").Replace("]", "_").Replace("'", "_").Replace("\"", "_");
             string lutFileName = baseFileNameWithoutExt + ".cube";
-            string lutPath = Path.Combine(outDir, lutFileName);
+            // .cube 파일은 사용자의 작업 폴더(바탕화면)를 어지럽히지 않도록 %LOCALAPPDATA%\DisplayProfileManager\luts 에 전용 보관
+            string globalLutDir = GetGlobalLutDir();
+            string lutPath = Path.Combine(globalLutDir, lutFileName);
 
             float g = currentProfileData.AvgGamma;
             float c = currentProfileData.AvgContrast;
@@ -1060,8 +1117,8 @@ namespace Gamma_Manager
 
                 string displayProfileName = GetFriendlyProfileName(currentProfileData.Name);
                 string successMsg = ko
-                    ? $"동영상 프로필 필터 배치가 성공적으로 생성되었습니다!\r\n\r\n• 대상 프로필: {displayProfileName}\r\n• 파일 위치: {batPath}\r\n\r\n[사용법]\r\n녹화된 영상을 이 파일 위에 마우스로 끌어다 놓으면(드래그&드롭) 프로필 색감이 그대로 입혀져 저장됩니다.\r\n\r\n저장된 폴더를 지금 여시겠습니까?"
-                    : $"Video profile filter batch generated successfully!\r\n\r\n• Profile: {displayProfileName}\r\n• Path: {batPath}\r\n\r\n[Usage]\r\nDrag and drop video files onto this .bat file to apply your display profile filter.\r\n\r\nOpen the folder now?";
+                    ? $"동영상/이미지 프로필 필터 배치가 성공적으로 생성되었습니다!\r\n\r\n• 대상 프로필: {displayProfileName}\r\n• 파일 위치: {batPath}\r\n\r\n[사용법]\r\n동영상 또는 이미지(스크린샷) 파일을 이 파일 위에 마우스로 끌어다 놓으면(드래그&드롭) 프로필 색감이 그대로 입혀져 저장됩니다.\r\n\r\n저장된 폴더를 지금 여시겠습니까?"
+                    : $"Video/image profile filter batch generated successfully!\r\n\r\n• Profile: {displayProfileName}\r\n• Path: {batPath}\r\n\r\n[Usage]\r\nDrag and drop video or image files onto this .bat file to apply your display profile filter.\r\n\r\nOpen the folder now?";
 
                 if (MessageBox.Show(this, successMsg, ko ? "생성 완료" : "Generated Successfully", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
                 {
@@ -1101,11 +1158,30 @@ namespace Gamma_Manager
 
             int sb = p.ShadowBoost;
             int sbm = p.ShadowBoostMode;
+            int sbt = p.ShadowBoostTint;
+            int hg = p.HighlightGuard;
+            int peak = p.CustomPeak > 0 ? p.CustomPeak : 25;
+            int width = p.CustomWidth > 0 ? p.CustomWidth : 3;
+
+            double rTint = 1.0, gTint = 1.0, bTint = 1.0;
+            if (sbt == 1) // Warm
+            {
+                rTint = 1.15;
+                gTint = 1.05;
+                bTint = 0.85;
+            }
+            else if (sbt == 2) // Cold
+            {
+                rTint = 0.85;
+                gTint = 1.05;
+                bTint = 1.15;
+            }
+
             float satFactor = p.Saturation / 100.0f;
 
             using (StreamWriter sw = new StreamWriter(filePath, false, Encoding.ASCII))
             {
-                sw.WriteLine("# Created by Display Profile Manager v1.5.5");
+                sw.WriteLine("# Created by Display Profile Manager v1.5.6");
                 sw.WriteLine($"TITLE \"DisplayProfileManager_{GetFriendlyProfileName(p.Name)}\"");
                 sw.WriteLine($"LUT_3D_SIZE {size}");
                 sw.WriteLine("DOMAIN_MIN 0.0 0.0 0.0");
@@ -1114,17 +1190,17 @@ namespace Gamma_Manager
                 for (int b = 0; b < size; b++)
                 {
                     double inB = (double)b / (size - 1);
-                    double curB = Gamma.ApplyChannelCurve(inB, bG, bC, bB, sb, sbm);
+                    double curB = Gamma.ApplyChannelCurve(inB, bG, bC, bB, sb, sbm, bTint, hg, peak, width);
 
                     for (int g = 0; g < size; g++)
                     {
                         double inG = (double)g / (size - 1);
-                        double curG = Gamma.ApplyChannelCurve(inG, gG, gC, gB, sb, sbm);
+                        double curG = Gamma.ApplyChannelCurve(inG, gG, gC, gB, sb, sbm, gTint, hg, peak, width);
 
                         for (int r = 0; r < size; r++)
                         {
                             double inR = (double)r / (size - 1);
-                            double curR = Gamma.ApplyChannelCurve(inR, rG, rC, rB, sb, sbm);
+                            double curR = Gamma.ApplyChannelCurve(inR, rG, rC, rB, sb, sbm, rTint, hg, peak, width);
 
                             double outR = curR;
                             double outG = curG;
@@ -1170,15 +1246,15 @@ namespace Gamma_Manager
             sb.AppendLine("setlocal enabledelayedexpansion");
             sb.AppendLine("pushd \"%~dp0\"");
             sb.AppendLine("");
-            sb.AppendLine($"title 동영상 프로필 필터 적용기 - {cleanTitle}");
+            sb.AppendLine($"title 동영상/이미지 프로필 필터 적용기 - {cleanTitle}");
             sb.AppendLine("");
             sb.AppendLine(":: ==============================================================================");
-            sb.AppendLine(":: [Display Profile Manager v1.5.5] 초고속 드래그 앤 드롭 동영상 프로필 필터");
+            sb.AppendLine(":: [Display Profile Manager v1.5.6] 초고속 드래그 앤 드롭 동영상/이미지 프로필 필터");
             sb.AppendLine($":: 대상 프로필: {cleanTitle}");
             sb.AppendLine($":: 적용 수치  : 감마={gStr}, 대비={cStr}, 밝기={bStr}, 채도={sStr}, 블랙EQ={shadowBoost}%");
             sb.AppendLine("::");
-            sb.AppendLine(":: [사용법] 동영상 파일(.mp4, .mkv, .mov, .avi 등)을 이 배치 파일");
-            sb.AppendLine(":: 아이콘 위에 마우스로 끌어다 놓으세요(드래그 앤 드롭).");
+            sb.AppendLine(":: [사용법] 동영상(.mp4, .mkv, .mov 등) 또는 이미지(.jpg, .png, .webp 등) 파일을");
+            sb.AppendLine(":: 이 배치 파일 아이콘 위에 마우스로 끌어다 놓으세요(드래그 앤 드롭).");
             sb.AppendLine(":: 여러 개를 동시에 던져도 순서대로 자동 적용됩니다!");
             sb.AppendLine(":: ==============================================================================");
             sb.AppendLine("");
@@ -1196,7 +1272,7 @@ namespace Gamma_Manager
             sb.AppendLine(":show_usage");
             sb.AppendLine("cls");
             sb.AppendLine("echo ==============================================================================");
-            sb.AppendLine("echo  [안내] 필터를 입힐 동영상 파일을 마우스로 끌어서 이 배치 파일 아이콘 위에 놓아주세요.");
+            sb.AppendLine("echo  [안내] 필터를 입힐 동영상 또는 이미지 파일을 마우스로 끌어서 이 배치 파일 아이콘 위에 놓아주세요.");
             sb.AppendLine("echo ==============================================================================");
             sb.AppendLine("echo.");
             sb.AppendLine("echo  현재 적용된 필터 수치:");
@@ -1271,51 +1347,59 @@ namespace Gamma_Manager
             {
                 case 1: // NVIDIA
                     sb.AppendLine("set \"VCODEC=h264_nvenc\"");
-                    sb.AppendLine("set \"EXTRA_OPTS=-preset p4 -rc vbr -cq 19 -b:v 0\"");
+                    sb.AppendLine("set \"EXTRA_OPTS=-preset p4 -rc vbr -cq 17 -b:v 0 -spatial-aq 1 -temporal-aq 1\"");
                     break;
                 case 2: // AMD
                     sb.AppendLine("set \"VCODEC=h264_amf\"");
-                    sb.AppendLine("set \"EXTRA_OPTS=-quality balanced -rc cqp -qp_p 19 -qp_i 19\"");
+                    sb.AppendLine("set \"EXTRA_OPTS=-quality balanced -rc cqp -qp_p 17 -qp_i 17\"");
                     break;
                 case 3: // Intel QSV
                     sb.AppendLine("set \"VCODEC=h264_qsv\"");
-                    sb.AppendLine("set \"EXTRA_OPTS=-preset medium -global_quality 19\"");
+                    sb.AppendLine("set \"EXTRA_OPTS=-preset medium -global_quality 17\"");
                     break;
                 case 4: // CPU
                     sb.AppendLine("set \"VCODEC=libx264\"");
-                    sb.AppendLine("set \"EXTRA_OPTS=-preset faster -crf 19\"");
+                    sb.AppendLine("set \"EXTRA_OPTS=-preset faster -crf 17 -aq-mode 2\"");
                     break;
                 default: // Auto
                     sb.AppendLine(":: 자동 감지 (지포스 -> 라데온 -> 인텔 -> CPU)");
                     sb.AppendLine("set \"VCODEC=libx264\"");
-                    sb.AppendLine("set \"EXTRA_OPTS=-preset faster -crf 19\"");
+                    sb.AppendLine("set \"EXTRA_OPTS=-preset faster -crf 17 -aq-mode 2\"");
                     sb.AppendLine("\"%FFMPEG_CMD%\" -hide_banner -encoders 2>&1 | findstr /i \"h264_nvenc\" >nul");
                     sb.AppendLine("if not errorlevel 1 (");
                     sb.AppendLine("    set \"VCODEC=h264_nvenc\"");
-                    sb.AppendLine("    set \"EXTRA_OPTS=-preset p4 -rc vbr -cq 19 -b:v 0\"");
+                    sb.AppendLine("    set \"EXTRA_OPTS=-preset p4 -rc vbr -cq 17 -b:v 0 -spatial-aq 1 -temporal-aq 1\"");
                     sb.AppendLine(") else (");
                     sb.AppendLine("    \"%FFMPEG_CMD%\" -hide_banner -encoders 2>&1 | findstr /i \"h264_amf\" >nul");
                     sb.AppendLine("    if not errorlevel 1 (");
                     sb.AppendLine("        set \"VCODEC=h264_amf\"");
-                    sb.AppendLine("        set \"EXTRA_OPTS=-quality balanced -rc cqp -qp_p 19 -qp_i 19\"");
+                    sb.AppendLine("        set \"EXTRA_OPTS=-quality balanced -rc cqp -qp_p 17 -qp_i 17\"");
                     sb.AppendLine("    ) else (");
                     sb.AppendLine("        \"%FFMPEG_CMD%\" -hide_banner -encoders 2>&1 | findstr /i \"h264_qsv\" >nul");
                     sb.AppendLine("        if not errorlevel 1 (");
                     sb.AppendLine("            set \"VCODEC=h264_qsv\"");
-                    sb.AppendLine("            set \"EXTRA_OPTS=-preset medium -global_quality 19\"");
+                    sb.AppendLine("            set \"EXTRA_OPTS=-preset medium -global_quality 17\"");
                     sb.AppendLine("        )");
                     sb.AppendLine("    )");
                     sb.AppendLine(")");
                     break;
             }
 
-            sb.AppendLine("");
-            sb.AppendLine(":: 3. 색감 필터 설정");
+            sb.AppendLine(":: 3. 색감 필터 설정 (전용 시스템 폴더 및 로컬 폴더 2중 탐색)");
             if (!string.IsNullOrEmpty(lutFileName))
             {
-                sb.AppendLine($"set \"LUT_FILE={lutFileName}\"");
-                sb.AppendLine("if exist \"%~dp0!LUT_FILE!\" (");
-                sb.AppendLine("    set \"VF_FILTER=lut3d='!LUT_FILE!'\"");
+                sb.AppendLine($"set \"LUT_NAME={lutFileName}\"");
+                sb.AppendLine("set \"SAFE_LUT_PATH=\"");
+                sb.AppendLine("if exist \"%~dp0!LUT_NAME!\" (");
+                sb.AppendLine("    set \"SAFE_LUT_PATH=%~dp0!LUT_NAME!\"");
+                sb.AppendLine(") else if exist \"%LOCALAPPDATA%\\DisplayProfileManager\\luts\\!LUT_NAME!\" (");
+                sb.AppendLine("    set \"SAFE_LUT_PATH=%LOCALAPPDATA%\\DisplayProfileManager\\luts\\!LUT_NAME!\"");
+                sb.AppendLine(")");
+                sb.AppendLine("");
+                sb.AppendLine("if not \"!SAFE_LUT_PATH!\"==\"\" (");
+                sb.AppendLine("    set \"FF_LUT=!SAFE_LUT_PATH:\\=/!\"");
+                sb.AppendLine("    set \"FF_LUT=!FF_LUT::=\\:!\"");
+                sb.AppendLine("    set \"VF_FILTER=lut3d='!FF_LUT!'\"");
                 sb.AppendLine(") else (");
                 sb.AppendLine("    set \"VF_FILTER=eq=gamma=!GAMMA!:contrast=!CONTRAST!:brightness=!BRIGHTNESS!:saturation=!SATURATION!\"");
                 sb.AppendLine(")");
@@ -1328,7 +1412,7 @@ namespace Gamma_Manager
             sb.AppendLine("");
             sb.AppendLine("cls");
             sb.AppendLine("echo ==============================================================================");
-            sb.AppendLine("echo  동영상 색감 변환 작업을 시작합니다. (인코더: !VCODEC!)");
+            sb.AppendLine("echo  동영상/이미지 색감 변환 작업을 시작합니다. (비디오 인코더: !VCODEC!)");
             sb.AppendLine("echo ==============================================================================");
             sb.AppendLine("echo.");
             sb.AppendLine("set \"PROCESSED_COUNT=0\"");
@@ -1344,30 +1428,74 @@ namespace Gamma_Manager
             sb.AppendLine(")");
             sb.AppendLine("");
             sb.AppendLine("set \"IN_FILE=%~1\"");
-            sb.AppendLine("set \"OUT_FILE=%~dp1%~n1!SUFFIX!%~x1\"");
+            sb.AppendLine("set \"OUT_BASE=%~dp1%~n1!SUFFIX!\"");
+            sb.AppendLine("set \"OUT_EXT=%~x1\"");
+            sb.AppendLine("set \"OUT_FILE=!OUT_BASE!!OUT_EXT!\"");
             sb.AppendLine("");
             sb.AppendLine("if /i \"!IN_FILE!\"==\"!OUT_FILE!\" (");
-            sb.AppendLine("    set \"OUT_FILE=%~dp1%~n1_filtered%~x1\"");
+            sb.AppendLine("    set \"OUT_BASE=%~dp1%~n1_filtered\"");
+            sb.AppendLine("    set \"OUT_FILE=!OUT_BASE!!OUT_EXT!\"");
             sb.AppendLine(")");
             sb.AppendLine("");
-            sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("echo [변환 진행 중] \"%~nx1\" --^> \"%~n1!SUFFIX!%~x1\"");
-            sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a copy \"!OUT_FILE!\"");
+            sb.AppendLine(":: 중복 파일 방지 (2), (3)... 자동 순번 부여");
+            sb.AppendLine("if exist \"!OUT_FILE!\" (");
+            sb.AppendLine("    set \"DUP_IDX=2\"");
+            sb.AppendLine("    set \"FOUND_DUP=\"");
+            sb.AppendLine("    for /l %%N in (2,1,999) do (");
+            sb.AppendLine("        if not defined FOUND_DUP (");
+            sb.AppendLine("            if not exist \"!OUT_BASE! (%%N)!OUT_EXT!\" (");
+            sb.AppendLine("                set \"DUP_IDX=%%N\"");
+            sb.AppendLine("                set \"FOUND_DUP=1\"");
+            sb.AppendLine("            )");
+            sb.AppendLine("        )");
+            sb.AppendLine("    )");
+            sb.AppendLine("    set \"OUT_FILE=!OUT_BASE! (!DUP_IDX!)!OUT_EXT!\"");
+            sb.AppendLine(")");
+            sb.AppendLine("for %%F in (\"!OUT_FILE!\") do set \"OUT_NAME=%%~nxF\"");
             sb.AppendLine("");
-            sb.AppendLine("if errorlevel 1 (");
-            sb.AppendLine("    echo [안내] 오디오 스트림 호환 인코딩(AAC)으로 재시도합니다...");
-            sb.AppendLine("    \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a aac -b:a 192k \"!OUT_FILE!\"");
+            sb.AppendLine(":: 파일 확장자 판별 (이미지 vs 동영상)");
+            sb.AppendLine("set \"EXT=%~x1\"");
+            sb.AppendLine("set \"IS_IMAGE=0\"");
+            sb.AppendLine("for %%E in (.jpg .jpeg .png .bmp .webp .tiff .tif) do (");
+            sb.AppendLine("    if /i \"!EXT!\"==\"%%E\" set \"IS_IMAGE=1\"");
             sb.AppendLine(")");
             sb.AppendLine("");
-            sb.AppendLine("if errorlevel 1 (");
-            sb.AppendLine("    echo.");
-            sb.AppendLine("    echo [오류] \"%~nx1\" 변환 실패!");
-            sb.AppendLine("    set /a \"FAIL_COUNT+=1\"");
+            sb.AppendLine("if \"!IS_IMAGE!\"==\"1\" (");
+            sb.AppendLine("    echo ------------------------------------------------------------------------------");
+            sb.AppendLine("    echo [이미지 필터 적용 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("    echo ------------------------------------------------------------------------------");
+            sb.AppendLine("    set \"IMG_OPTS=\"");
+            sb.AppendLine("    if /i \"!EXT!\"==\".jpg\" set \"IMG_OPTS=-q:v 2\"");
+            sb.AppendLine("    if /i \"!EXT!\"==\".jpeg\" set \"IMG_OPTS=-q:v 2\"");
+            sb.AppendLine("    if /i \"!EXT!\"==\".webp\" set \"IMG_OPTS=-q:v 95\"");
+            sb.AppendLine("    \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -frames:v 1 -update 1 !IMG_OPTS! \"!OUT_FILE!\"");
+            sb.AppendLine("    if errorlevel 1 (");
+            sb.AppendLine("        echo.");
+            sb.AppendLine("        echo [오류] \"%~nx1\" 이미지 변환 실패!");
+            sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
+            sb.AppendLine("    ) else (");
+            sb.AppendLine("        echo.");
+            sb.AppendLine("        echo [성공] 이미지 필터 적용 완료: \"!OUT_NAME!\"");
+            sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
+            sb.AppendLine("    )");
             sb.AppendLine(") else (");
-            sb.AppendLine("    echo.");
-            sb.AppendLine("    echo [성공] 변환 완료: \"%~n1!SUFFIX!%~x1\"");
-            sb.AppendLine("    set /a \"PROCESSED_COUNT+=1\"");
+            sb.AppendLine("    echo ------------------------------------------------------------------------------");
+            sb.AppendLine("    echo [동영상 변환 진행 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("    echo ------------------------------------------------------------------------------");
+            sb.AppendLine("    \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a copy \"!OUT_FILE!\"");
+            sb.AppendLine("    if errorlevel 1 (");
+            sb.AppendLine("        echo [안내] 오디오 스트림 호환 AAC 모드로 재시도합니다...");
+            sb.AppendLine("        \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a aac -b:a 192k \"!OUT_FILE!\"");
+            sb.AppendLine("    )");
+            sb.AppendLine("    if errorlevel 1 (");
+            sb.AppendLine("        echo.");
+            sb.AppendLine("        echo [오류] \"%~nx1\" 동영상 변환 실패!");
+            sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
+            sb.AppendLine("    ) else (");
+            sb.AppendLine("        echo.");
+            sb.AppendLine("        echo [성공] 동영상 필터 적용 완료: \"!OUT_NAME!\"");
+            sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
+            sb.AppendLine("    )");
             sb.AppendLine(")");
             sb.AppendLine("");
             sb.AppendLine("shift");
@@ -1376,7 +1504,7 @@ namespace Gamma_Manager
             sb.AppendLine(":all_done");
             sb.AppendLine("echo.");
             sb.AppendLine("echo ==============================================================================");
-            sb.AppendLine("echo  모든 동영상 변환 작업이 완료되었습니다!");
+            sb.AppendLine("echo  모든 미디어(동영상/이미지) 변환 작업이 완료되었습니다!");
             sb.AppendLine("echo  - 성공: !PROCESSED_COUNT!건");
             sb.AppendLine("echo  - 실패: !FAIL_COUNT!건");
             sb.AppendLine("echo ==============================================================================");
