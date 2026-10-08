@@ -257,7 +257,7 @@ namespace Gamma_Manager
             {
                 try
                 {
-                    Marshal.ReleaseComObject(comObject);
+                    Marshal.FinalReleaseComObject(comObject);
                 }
                 catch { }
             }

@@ -50,7 +50,7 @@ namespace Gamma_Manager
         // 디스플레이 토폴로지 세대 번호 발급 및 조회
         public int NextTopologyGeneration()
         {
-            return Interlocked.Increment(ref _topologyGeneration);
+            return Interlocked.Increment(ref _topologyGeneration) & 0x7FFFFFFF;
         }
 
         public int CurrentTopologyGeneration => Volatile.Read(ref _topologyGeneration);
@@ -59,7 +59,7 @@ namespace Gamma_Manager
         public int NextGeneration(string monitorKey)
         {
             if (string.IsNullOrEmpty(monitorKey)) return 0;
-            return _applyGenerations.AddOrUpdate(monitorKey, 1, (_, current) => unchecked(current + 1));
+            return _applyGenerations.AddOrUpdate(monitorKey, 1, (_, current) => (current + 1) & 0x7FFFFFFF);
         }
 
         // 모니터별 현재 세대 번호 조회
@@ -74,7 +74,7 @@ namespace Gamma_Manager
         {
             foreach (var key in _applyGenerations.Keys)
             {
-                _applyGenerations.AddOrUpdate(key, 1, (_, current) => unchecked(current + 1));
+                _applyGenerations.AddOrUpdate(key, 1, (_, current) => (current + 1) & 0x7FFFFFFF);
             }
         }
 

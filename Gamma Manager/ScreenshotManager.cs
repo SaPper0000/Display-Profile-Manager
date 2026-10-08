@@ -387,10 +387,6 @@ namespace Gamma_Manager
             BitmapData bData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
             try
             {
-                int byteCount = Math.Abs(bData.Stride) * bmp.Height;
-                byte[] pixels = new byte[byteCount];
-                Marshal.Copy(bData.Scan0, pixels, 0, byteCount);
-
                 float satFactor = (float)saturation / 100.0f;
                 bool applySat = Math.Abs(satFactor - 1.0f) > 0.001f;
 
@@ -398,37 +394,40 @@ namespace Gamma_Manager
                 int widthVal = bmp.Width;
                 int stride = bData.Stride;
 
-                for (int y = 0; y < height; y++)
+                unsafe
                 {
-                    int rowOffset = y * stride;
-                    for (int x = 0; x < widthVal; x++)
+                    byte* scan0 = (byte*)bData.Scan0.ToPointer();
+
+                    for (int y = 0; y < height; y++)
                     {
-                        int idx = rowOffset + (x * 4);
-                        byte b = lutB[pixels[idx]];
-                        byte g = lutG[pixels[idx + 1]];
-                        byte r = lutR[pixels[idx + 2]];
-
-                        if (applySat)
+                        byte* row = scan0 + (y * stride);
+                        for (int x = 0; x < widthVal; x++)
                         {
-                            double gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                            double adjR = gray + (r - gray) * satFactor;
-                            double adjG = gray + (g - gray) * satFactor;
-                            double adjB = gray + (b - gray) * satFactor;
+                            int idx = x * 4;
+                            byte b = lutB[row[idx]];
+                            byte g = lutG[row[idx + 1]];
+                            byte r = lutR[row[idx + 2]];
 
-                            pixels[idx] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(adjB)));
-                            pixels[idx + 1] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(adjG)));
-                            pixels[idx + 2] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(adjR)));
-                        }
-                        else
-                        {
-                            pixels[idx] = b;
-                            pixels[idx + 1] = g;
-                            pixels[idx + 2] = r;
+                            if (applySat)
+                            {
+                                double gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                                double adjR = gray + (r - gray) * satFactor;
+                                double adjG = gray + (g - gray) * satFactor;
+                                double adjB = gray + (b - gray) * satFactor;
+
+                                row[idx]     = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(adjB)));
+                                row[idx + 1] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(adjG)));
+                                row[idx + 2] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(adjR)));
+                            }
+                            else
+                            {
+                                row[idx]     = b;
+                                row[idx + 1] = g;
+                                row[idx + 2] = r;
+                            }
                         }
                     }
                 }
-
-                Marshal.Copy(pixels, 0, bData.Scan0, byteCount);
             }
             finally
             {

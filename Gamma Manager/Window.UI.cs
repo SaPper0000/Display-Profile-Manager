@@ -137,8 +137,8 @@ namespace Gamma_Manager
         private void ApplyLanguage()
         {
             bool ko = LanguageManager.Korean;
-            Text = "Display Profile Manager v1.5.6";
-            notifyIcon.Text = "Display Profile Manager v1.5.6";
+            Text = "Display Profile Manager v1.5.7";
+            notifyIcon.Text = "Display Profile Manager v1.5.7";
 
             buttonRed.Text = ko ? "빨강" : "Red";
             buttonGreen.Text = ko ? "초록" : "Green";

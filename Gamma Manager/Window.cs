@@ -121,8 +121,8 @@ namespace Gamma_Manager
             buttonGreen.Font = _cachedRegularFont;
             buttonBlue.Font = _cachedRegularFont;
 
-            this.Text = "Display Profile Manager v1.5.6";
-            if (notifyIcon != null) notifyIcon.Text = "Display Profile Manager v1.5.6";
+            this.Text = "Display Profile Manager v1.5.7";
+            if (notifyIcon != null) notifyIcon.Text = "Display Profile Manager v1.5.7";
 
             // 2. 창이 화면에 뜨자마자(Shown) 비동기 백그라운드 로딩 시작
             Shown += Window_ShownAsync;

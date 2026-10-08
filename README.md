@@ -1,17 +1,13 @@
 <!-- ================================================================= -->
 <!-- 프로젝트 타이틀 및 현재 버전 정보 -->
 <!-- ================================================================= -->
-# 🖥️ Display Profile Manager v1.5.6
-
-
-<img width="1082" height="752" alt="image" src="https://github.com/user-attachments/assets/df4029b0-836f-40c4-8d7e-39e8e9aa505b" />
-
+# 🖥️ Display Profile Manager v1.5.7
 
 > Windows용 모니터별 디스플레이 프로필, 게임 자동 감지, 즉시 볼륨 전환, 화면 필터 스크린샷, 동영상 프로필 필터 및 색상 설정 관리 도구
 
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](#)
 [![Framework](https://img.shields.io/badge/.NET%20Framework-4.7.2-512BD4?logo=dotnet&logoColor=white)](#)
-[![Version](https://img.shields.io/badge/Version-v1.5.6-2EA44F)](#)
+[![Version](https://img.shields.io/badge/Version-v1.5.7-2EA44F)](#)
 [![License](https://img.shields.io/badge/License-CC0%201.0-9CF?logo=creativecommons&logoColor=white)](LICENSE.txt)
 
 Display Profile Manager는 감마, 밝기, 대비, RGB 색상, 채도, 하드웨어 DDC/CI 같은 화면 설정을 모니터별 프로필로 저장하고 빠르게 적용할 수 있는 Windows용 디스플레이 & 오디오 통합 제어 유틸리티입니다.
@@ -29,12 +25,33 @@ Display Profile Manager는 감마, 밝기, 대비, RGB 색상, 채도, 하드웨
 
 1. [Releases](https://github.com/SaPper0000/Display-Profile-Manager/releases)에서 최신 릴리즈 압축 파일을 다운로드합니다.
 2. 원하는 위치에 압축을 해제합니다.
-3. `Display-Profile-Manager-v1.5.6.exe`를 실행합니다.
+3. `Display-Profile-Manager-v1.5.7.exe`를 실행합니다.
 4. 상단 모니터 목록에서 제어할 디스플레이를 선택합니다.
 5. 슬라이더로 원하는 색상 및 하드웨어 값을 조절한 뒤 프로필을 저장합니다.
 6. 필요에 따라 **게임 자동 적용**, **글로벌 핫키**, **즉시 볼륨 전환**, **화면 필터 스크린샷**, **동영상 프로필 필터**를 등록하여 사용합니다.
 
 별도의 설치 과정이 필요 없는 포터블 실행 파일입니다.
+
+---
+
+<!-- ================================================================= -->
+<!-- v1.5.7 릴리즈 상세 변경 로그 -->
+<!-- ================================================================= -->
+## ✨ v1.5.7 릴리즈 변경 사항
+
+### 🆕 새로운 기능 및 개선
+- **🎞️ 동영상/미디어 필터 확장 (GIF 및 WebP 지원):**
+  - 동영상 프로필 필터 적용기(`.bat`)에 애니메이션 GIF(`.gif`) 및 WebP(`.webp`) 파일 드래그 앤 드롭 변환 지원
+  - 애니메이션 프레임 유지 및 무한 루프(`loop 0`), 고품질 팔레트 최적화 처리
+  - 이미지 및 움짤도 모니터 튜닝 색감 그대로 원클릭 필터 적용 가능
+
+- **📦 v1.5.7 프로필 클립보드 공유:**
+  - 최신 식별자(`TGM-Profile|v1.5.7|...`) 갱신 및 이전 모든 버전(v1.5.6 이하)과의 완벽한 상호 하위 호환성 유지
+
+### ⚡ 안정성 및 버그 수정
+- **안티치트 보호 게임 프로세스 접근 최적화:** EasyAntiCheat, BattlEye 등 보안/안티치트 적용 게임이나 관리자 권한 프로세스에서도 'Access Denied' 오류 없이 안전하게 볼륨 전환 및 창 감지가 동작하도록 프로세스 권한 조회(`PROCESS_QUERY_LIMITED_INFORMATION`) 개선
+- **디스플레이 토폴로지 세대 동기화 보강:** 다중 디스플레이 연결/해제 및 빠른 프로필 연속 전환 시 스레드 간 상태 불일치 방지
+- **필터 스크린샷 및 리소스 관리 안정화**
 
 ---
 
@@ -260,7 +277,7 @@ Display Profile Manager는 감마, 밝기, 대비, RGB 색상, 채도, 하드웨
 | 비정상 종료 시 자동 원본 복구 | ✅ | 프로세스 비정상 종료 보호 |
 | 다국어 OSD 화면 오버레이 | ✅ | 디스플레이/볼륨 알림 독립 설정 (위치/시간/크기/색상) |
 | 확장 대비 (최대 10.00) 지원 | ✅ | 고대비 감마 프로필 지원 |
-| 프로필 Import / Export 클립보드 공유 | ✅ | v1.5.6 포맷 및 구버전 하위 호환 |
+| 프로필 Import / Export 클립보드 공유 | ✅ | v1.5.7 포맷 및 구버전 하위 호환 |
 | 프로필 데이터 구조 일원화 (`ProfileData`) | ✅ | 내부 파라미터 입출력 구조 일원화 |
 
 ---
@@ -286,13 +303,13 @@ Display Profile Manager는 감마, 밝기, 대비, RGB 색상, 채도, 하드웨
 빌드 결과 폴더:
 
 ```text
-Gamma Manager\Display-Profile-Manager-v1.5.6\
+Gamma Manager\Display-Profile-Manager-v1.5.7\
 ```
 
 실행 파일:
 
 ```text
-Display-Profile-Manager-v1.5.6.exe
+Display-Profile-Manager-v1.5.7.exe
 ```
 
 ---

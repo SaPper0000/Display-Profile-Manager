@@ -753,12 +753,13 @@ namespace Gamma_Manager
                   "   - 저장 폴더(기본값: 바탕화면)를 확인하고 [🎬 필터 적용 (.bat) 생성] 버튼을 누릅니다.\r\n" +
                   "   - 바탕화면에는 깔끔하게 [필터_프로필명.bat] 단일 실행 파일만 생성됩니다!\r\n" +
                   "     (3D 색상표 데이터는 전용 시스템 폴더에 안전하게 자동 보관되어 바탕화면을 어지럽히지 않습니다)\r\n\r\n" +
-                  "3. 동영상 또는 이미지 파일 마우스 드래그 & 드롭 (핵심)\r\n" +
-                  "   - 동영상(.mp4, .mkv, .mov 등)이나 이미지/스크린샷(.jpg, .png, .bmp, .webp 등)을 마우스로 끌어서\r\n" +
-                  "     생성된 .bat 파일 아이콘 위에 놓아주세요.\r\n" +
-                  "   - 여러 개의 파일(영상+이미지 혼합 가능)을 한꺼번에 선택하여 던져도 순서대로 자동 적용됩니다!\r\n\r\n" +
+                  "3. 동영상, 이미지 또는 움짤 파일 마우스 드래그 & 드롭 (핵심)\r\n" +
+                  "   - 동영상(.mp4, .mkv, .mov 등), 이미지(.jpg, .png, .bmp 등) 또는 움짤/애니메이션(.gif, .webp)을\r\n" +
+                  "     마우스로 끌어서 생성된 .bat 파일 아이콘 위에 놓아주세요.\r\n" +
+                  "   - 여러 개의 파일(영상+이미지+움짤 혼합 가능)을 한꺼번에 선택하여 던져도 순서대로 자동 적용됩니다!\r\n\r\n" +
                   "4. 결과물 확인 (원본 포맷 및 초고화질 유지)\r\n" +
-                  "   - 이미지 파일은 0.1초 만에 무손실/초고화질로 즉시 필터가 입혀져 저장됩니다.\r\n" +
+                  "   - 일반 이미지는 0.1초 만에 무손실/초고화질로 즉시 필터가 입혀져 저장됩니다.\r\n" +
+                  "   - GIF 및 WebP 움짤은 모든 프레임과 무한 루프를 보존하며 고품질 팔레트로 필터링됩니다.\r\n" +
                   "   - 동영상 파일은 원본 확장자(mp4, mkv, mov 등)를 유지하며 지포스/라데온/인텔 GPU 가속으로 초고속 인코딩됩니다."
                 : "【 How to Use Video/Image Profile Filter 】\r\n\r\n" +
                   "1. Select Monitor & Profile\r\n" +
@@ -767,12 +768,13 @@ namespace Gamma_Manager
                   "2. Generate Filter File\r\n" +
                   "   - Click [🎬 Generate Filter (.bat)] to create your clean standalone filter .bat file.\r\n" +
                   "     (3D LUT color tables are stored cleanly in the app data folder without cluttering your desktop)\r\n\r\n" +
-                  "3. Drag & Drop Videos or Images\r\n" +
-                  "   - Simply drag video files (.mp4, .mkv, etc.) or images (.jpg, .png, .webp, etc.)\r\n" +
+                  "3. Drag & Drop Videos, Images or Animations\r\n" +
+                  "   - Simply drag video files (.mp4, .mkv, etc.), images (.jpg, .png, etc.), or GIFs / WebP animations\r\n" +
                   "     and drop them onto the generated .bat file icon.\r\n" +
                   "   - Drag multiple files at once for sequential batch processing.\r\n\r\n" +
                   "4. Output Media (Preserves Quality & Original Format)\r\n" +
-                  "   - Images are processed in 0.1s with maximum quality.\r\n" +
+                  "   - Static images are processed in 0.1s with maximum quality.\r\n" +
+                  "   - Animated GIF and WebP files preserve all frames and looping with high fidelity.\r\n" +
                   "   - Videos are hardware accelerated via NVENC, AMF, or QSV with zero quality loss!";
 
             MessageBox.Show(this, helpText, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1166,7 +1168,7 @@ namespace Gamma_Manager
 
             using (StreamWriter sw = new StreamWriter(filePath, false, Encoding.ASCII))
             {
-                sw.WriteLine("# Created by Display Profile Manager v1.5.6");
+                sw.WriteLine("# Created by Display Profile Manager v1.5.7");
                 sw.WriteLine($"TITLE \"DisplayProfileManager_{GetFriendlyProfileName(p.Name)}\"");
                 sw.WriteLine($"LUT_3D_SIZE {size}");
                 sw.WriteLine("DOMAIN_MIN 0.0 0.0 0.0");
@@ -1234,11 +1236,11 @@ namespace Gamma_Manager
             sb.AppendLine($"title 동영상/이미지 프로필 필터 적용기 - {cleanTitle}");
             sb.AppendLine("");
             sb.AppendLine(":: ==============================================================================");
-            sb.AppendLine(":: [Display Profile Manager v1.5.6] 초고속 드래그 앤 드롭 동영상/이미지 프로필 필터");
+            sb.AppendLine(":: [Display Profile Manager v1.5.7] 초고속 드래그 앤 드롭 동영상/이미지 프로필 필터");
             sb.AppendLine($":: 대상 프로필: {cleanTitle}");
             sb.AppendLine($":: 적용 수치  : 감마={gStr}, 대비={cStr}, 밝기={bStr}, 채도={sStr}, 블랙EQ={shadowBoost}%");
             sb.AppendLine("::");
-            sb.AppendLine(":: [사용법] 동영상(.mp4, .mkv, .mov 등) 또는 이미지(.jpg, .png, .webp 등) 파일을");
+            sb.AppendLine(":: [사용법] 동영상(.mp4, .mkv, .mov 등), 이미지(.jpg, .png 등), 움짤(.gif, .webp) 파일을");
             sb.AppendLine(":: 이 배치 파일 아이콘 위에 마우스로 끌어다 놓으세요(드래그 앤 드롭).");
             sb.AppendLine(":: 여러 개를 동시에 던져도 순서대로 자동 적용됩니다!");
             sb.AppendLine(":: ==============================================================================");
@@ -1257,7 +1259,7 @@ namespace Gamma_Manager
             sb.AppendLine(":show_usage");
             sb.AppendLine("cls");
             sb.AppendLine("echo ==============================================================================");
-            sb.AppendLine("echo  [안내] 필터를 입힐 동영상 또는 이미지 파일을 마우스로 끌어서 이 배치 파일 아이콘 위에 놓아주세요.");
+            sb.AppendLine("echo  [안내] 필터를 입힐 미디어(동영상, 이미지, GIF/WebP 움짤) 파일을 마우스로 끌어서 놓아주세요.");
             sb.AppendLine("echo ==============================================================================");
             sb.AppendLine("echo.");
             sb.AppendLine("echo  현재 적용된 필터 수치:");
@@ -1438,51 +1440,87 @@ namespace Gamma_Manager
             sb.AppendLine(")");
             sb.AppendLine("for %%F in (\"!OUT_FILE!\") do set \"OUT_NAME=%%~nxF\"");
             sb.AppendLine("");
-            sb.AppendLine(":: 파일 확장자 판별 (이미지 vs 동영상)");
+            sb.AppendLine(":: 파일 확장자 판별 (GIF 움짤 vs WebP vs 일반 이미지 vs 동영상)");
             sb.AppendLine("set \"EXT=%~x1\"");
-            sb.AppendLine("set \"IS_IMAGE=0\"");
-            sb.AppendLine("for %%E in (.jpg .jpeg .png .bmp .webp .tiff .tif) do (");
-            sb.AppendLine("    if /i \"!EXT!\"==\"%%E\" set \"IS_IMAGE=1\"");
+            sb.AppendLine("if /i \"!EXT!\"==\".gif\" goto :process_gif");
+            sb.AppendLine("if /i \"!EXT!\"==\".webp\" goto :process_webp");
+            sb.AppendLine("for %%E in (.jpg .jpeg .png .bmp .tiff .tif) do (");
+            sb.AppendLine("    if /i \"!EXT!\"==\"%%E\" goto :process_image");
             sb.AppendLine(")");
+            sb.AppendLine("goto :process_video");
             sb.AppendLine("");
-            sb.AppendLine("if \"!IS_IMAGE!\"==\"1\" (");
-            sb.AppendLine("    echo ------------------------------------------------------------------------------");
-            sb.AppendLine("    echo [이미지 필터 적용 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
-            sb.AppendLine("    echo ------------------------------------------------------------------------------");
-            sb.AppendLine("    set \"IMG_OPTS=\"");
-            sb.AppendLine("    if /i \"!EXT!\"==\".jpg\" set \"IMG_OPTS=-q:v 2\"");
-            sb.AppendLine("    if /i \"!EXT!\"==\".jpeg\" set \"IMG_OPTS=-q:v 2\"");
-            sb.AppendLine("    if /i \"!EXT!\"==\".webp\" set \"IMG_OPTS=-q:v 95\"");
-            sb.AppendLine("    \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -frames:v 1 -update 1 !IMG_OPTS! \"!OUT_FILE!\"");
-            sb.AppendLine("    if errorlevel 1 (");
+            sb.AppendLine(":process_gif");
+            sb.AppendLine("echo ------------------------------------------------------------------------------");
+            sb.AppendLine("echo [GIF(움짤) 필터 적용 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("echo ------------------------------------------------------------------------------");
+            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"!IN_FILE!\" -vf \"!VF_FILTER!,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse\" -loop 0 \"!OUT_FILE!\"");
+            sb.AppendLine("if errorlevel 1 (");
+            sb.AppendLine("        echo.");
+            sb.AppendLine("        echo [오류] \"%~nx1\" GIF 변환 실패!");
+            sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
+            sb.AppendLine(") else (");
+            sb.AppendLine("        echo.");
+            sb.AppendLine("        echo [성공] GIF 필터 적용 완료: \"!OUT_NAME!\"");
+            sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
+            sb.AppendLine(")");
+            sb.AppendLine("goto :finish_current_item");
+            sb.AppendLine("");
+            sb.AppendLine(":process_webp");
+            sb.AppendLine("echo ------------------------------------------------------------------------------");
+            sb.AppendLine("echo [WebP(이미지/움짤) 필터 적용 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("echo ------------------------------------------------------------------------------");
+            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v libwebp -quality 95 -loop 0 \"!OUT_FILE!\"");
+            sb.AppendLine("if errorlevel 1 (");
+            sb.AppendLine("        echo.");
+            sb.AppendLine("        echo [오류] \"%~nx1\" WebP 변환 실패!");
+            sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
+            sb.AppendLine(") else (");
+            sb.AppendLine("        echo.");
+            sb.AppendLine("        echo [성공] WebP 필터 적용 완료: \"!OUT_NAME!\"");
+            sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
+            sb.AppendLine(")");
+            sb.AppendLine("goto :finish_current_item");
+            sb.AppendLine("");
+            sb.AppendLine(":process_image");
+            sb.AppendLine("echo ------------------------------------------------------------------------------");
+            sb.AppendLine("echo [이미지 필터 적용 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("echo ------------------------------------------------------------------------------");
+            sb.AppendLine("set \"IMG_OPTS=\"");
+            sb.AppendLine("if /i \"!EXT!\"==\".jpg\" set \"IMG_OPTS=-q:v 2\"");
+            sb.AppendLine("if /i \"!EXT!\"==\".jpeg\" set \"IMG_OPTS=-q:v 2\"");
+            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -frames:v 1 -update 1 !IMG_OPTS! \"!OUT_FILE!\"");
+            sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("        echo.");
             sb.AppendLine("        echo [오류] \"%~nx1\" 이미지 변환 실패!");
             sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
-            sb.AppendLine("    ) else (");
+            sb.AppendLine(") else (");
             sb.AppendLine("        echo.");
             sb.AppendLine("        echo [성공] 이미지 필터 적용 완료: \"!OUT_NAME!\"");
             sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
-            sb.AppendLine("    )");
-            sb.AppendLine(") else (");
-            sb.AppendLine("    echo ------------------------------------------------------------------------------");
-            sb.AppendLine("    echo [동영상 변환 진행 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
-            sb.AppendLine("    echo ------------------------------------------------------------------------------");
-            sb.AppendLine("    \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a copy \"!OUT_FILE!\"");
-            sb.AppendLine("    if errorlevel 1 (");
+            sb.AppendLine(")");
+            sb.AppendLine("goto :finish_current_item");
+            sb.AppendLine("");
+            sb.AppendLine(":process_video");
+            sb.AppendLine("echo ------------------------------------------------------------------------------");
+            sb.AppendLine("echo [동영상 변환 진행 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("echo ------------------------------------------------------------------------------");
+            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a copy \"!OUT_FILE!\"");
+            sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("        echo [안내] 오디오 스트림 호환 AAC 모드로 재시도합니다...");
             sb.AppendLine("        \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a aac -b:a 192k \"!OUT_FILE!\"");
-            sb.AppendLine("    )");
-            sb.AppendLine("    if errorlevel 1 (");
+            sb.AppendLine(")");
+            sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("        echo.");
             sb.AppendLine("        echo [오류] \"%~nx1\" 동영상 변환 실패!");
             sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
-            sb.AppendLine("    ) else (");
+            sb.AppendLine(") else (");
             sb.AppendLine("        echo.");
             sb.AppendLine("        echo [성공] 동영상 필터 적용 완료: \"!OUT_NAME!\"");
             sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
-            sb.AppendLine("    )");
             sb.AppendLine(")");
+            sb.AppendLine("goto :finish_current_item");
             sb.AppendLine("");
+            sb.AppendLine(":finish_current_item");
             sb.AppendLine("shift");
             sb.AppendLine("goto :process_loop");
             sb.AppendLine("");
