@@ -147,7 +147,11 @@ namespace Gamma_Manager
                 List<string> procNames = new List<string>();
                 try
                 {
-                    int currentPid = Process.GetCurrentProcess().Id;
+                    int currentPid;
+                    using (Process curProc = Process.GetCurrentProcess())
+                    {
+                        currentPid = curProc.Id;
+                    }
                     procs = Process.GetProcesses();
 
                     foreach (var p in procs)
@@ -157,16 +161,15 @@ namespace Gamma_Manager
                             if (p.Id == currentPid || p.MainWindowHandle == IntPtr.Zero || string.IsNullOrWhiteSpace(p.MainWindowTitle))
                                 continue;
 
-                            string exeName = string.Empty;
-                            try
-                            {
-                                if (p.MainModule != null)
-                                    exeName = Path.GetFileName(p.MainModule.FileName);
-                            }
-                            catch
-                            {
-                                exeName = p.ProcessName + ".exe";
-                            }
+                            // p.MainModule 참조 시 내부적으로 PROCESS_VM_READ(0x0010)를 요청하여 안티치트(BattlEye/EAC 등)에 의해
+                            // Access Denied 예외가 발생하는 것을 방지하기 위해 PROCESS_QUERY_LIMITED_INFORMATION(0x1000) 기반 조회 사용
+                            string baseName = AudioManager.GetProcessNameById(p.Id);
+                            if (string.IsNullOrEmpty(baseName))
+                                baseName = p.ProcessName;
+
+                            string exeName = !string.IsNullOrEmpty(baseName)
+                                ? (baseName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? baseName : baseName + ".exe")
+                                : string.Empty;
 
                             if (!string.IsNullOrEmpty(exeName) && !procNames.Contains(exeName, StringComparer.OrdinalIgnoreCase))
                             {

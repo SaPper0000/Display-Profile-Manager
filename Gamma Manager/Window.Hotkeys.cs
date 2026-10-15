@@ -289,6 +289,7 @@ namespace Gamma_Manager
         {
             toggleStateByMonitor.Clear();
             currentPresetByMonitor.Clear();
+            gameAutoSessionOverrideByMonitor?.Clear();
             displayService?.InvalidateAllGenerations();
         }
 
@@ -299,6 +300,7 @@ namespace Gamma_Manager
 
             string monitorKey = DisplayService.GetMonitorKey(targetDisplay);
             toggleStateByMonitor.Remove(monitorKey);
+            gameAutoSessionOverrideByMonitor?.Remove(monitorKey);
             int currentGen = displayService != null ? displayService.NextGeneration(monitorKey) : 0;
             int targetTopologyGen = displayService != null ? displayService.CurrentTopologyGeneration : 0;
 
@@ -310,7 +312,7 @@ namespace Gamma_Manager
             {
                 origBrightness = parsedB;
             }
-            else if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out int bVal, out _))
+            else if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out int bVal, out _, monitorKey))
             {
                 origBrightness = bVal;
             }
@@ -319,7 +321,7 @@ namespace Gamma_Manager
             {
                 origContrast = parsedC;
             }
-            else if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out _, out int cVal))
+            else if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out _, out int cVal, monitorKey))
             {
                 origContrast = cVal;
             }
@@ -334,13 +336,14 @@ namespace Gamma_Manager
             targetDisplay.shadowBoostTint = 0;
             targetDisplay.highlightGuard = 0;
             targetDisplay.shadowBoostCustomPeak = 25;
+            targetDisplay.shadowBoostCustomWidth = 3;
             // 기본값 채도 결정 (1순위: INI의 [기본값] 프로필, 2순위: StartupState 백업, 3순위: saturationDefault)
             int satDef = targetDisplay.saturationDefault;
             if (!string.IsNullOrEmpty(defPreset) && int.TryParse(iniFile.Read("saturation", defPreset), out int parsedSat))
             {
                 satDef = parsedSat;
             }
-            else if (StartupStateManager.TryGetOriginalSaturation(targetDisplay.displayLink, out int origSat))
+            else if (StartupStateManager.TryGetOriginalSaturation(targetDisplay.displayLink, out int origSat, monitorKey))
             {
                 satDef = origSat;
             }
@@ -387,6 +390,7 @@ namespace Gamma_Manager
             if (displays == null) return;
             displayService?.InvalidateAllGenerations();
             toggleStateByMonitor.Clear();
+            gameAutoSessionOverrideByMonitor?.Clear();
 
             List<Display.DisplayInfo> targetDisplays = new List<Display.DisplayInfo>(displays);
             var expectedGenerations = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -409,6 +413,7 @@ namespace Gamma_Manager
                 if (display == null) continue;
 
                 string defPreset = GetDefaultProfileName(display);
+                string key = DisplayService.GetMonitorKey(display);
 
                 int origB = display.monitorBrightness;
                 int origC = display.monitorContrast;
@@ -416,7 +421,7 @@ namespace Gamma_Manager
                 {
                     origB = parsedB;
                 }
-                else if (StartupStateManager.TryGetOriginalValues(display.displayLink, out int bVal, out _))
+                else if (StartupStateManager.TryGetOriginalValues(display.displayLink, out int bVal, out _, key))
                 {
                     origB = bVal;
                 }
@@ -425,7 +430,7 @@ namespace Gamma_Manager
                 {
                     origC = parsedC;
                 }
-                else if (StartupStateManager.TryGetOriginalValues(display.displayLink, out _, out int cVal))
+                else if (StartupStateManager.TryGetOriginalValues(display.displayLink, out _, out int cVal, key))
                 {
                     origC = cVal;
                 }
@@ -441,19 +446,19 @@ namespace Gamma_Manager
                 display.shadowBoostTint = 0;
                 display.highlightGuard = 0;
                 display.shadowBoostCustomPeak = 25;
+                display.shadowBoostCustomWidth = 3;
                 int satDef = display.saturationDefault;
                 if (!string.IsNullOrEmpty(defPreset) && int.TryParse(iniFile.Read("saturation", defPreset), out int parsedSat))
                 {
                     satDef = parsedSat;
                 }
-                else if (StartupStateManager.TryGetOriginalSaturation(display.displayLink, out int origSat))
+                else if (StartupStateManager.TryGetOriginalSaturation(display.displayLink, out int origSat, key))
                 {
                     satDef = origSat;
                 }
                 display.saturationDefault = satDef;
                 if (display.saturationSupported) display.saturation = satDef;
 
-                string key = DisplayService.GetMonitorKey(display);
                 currentPresetByMonitor?.Remove(key);
 
                 int expGen = expectedGenerations.TryGetValue(key, out int g) ? g : 0;
@@ -503,6 +508,24 @@ namespace Gamma_Manager
 
             if (IsHotkeyOSDEnabled())
                 OSDForm.ShowMessage(null, LanguageManager.Korean ? "🔄 전체 초기화됨" : "🔄 All Reset");
+        }
+
+        private void SyncManualHotkeyWithGameAuto(Display.DisplayInfo targetDisplay, string monitorKey, string appliedPreset)
+        {
+            if (string.IsNullOrEmpty(monitorKey) || string.IsNullOrEmpty(appliedPreset)) return;
+
+            if (autoGameFocused && string.Equals(activeAutoMonitor, monitorKey, StringComparison.OrdinalIgnoreCase))
+            {
+                // 인게임 중 수동으로 적용/순환 핫키를 누른 경우: 현재 게임 세션의 활성 프로필로 기억 (Alt+Tab 후 복귀 시에도 유지)
+                gameAutoSessionOverrideByMonitor[monitorKey] = appliedPreset;
+                activeAutoPreset = appliedPreset;
+            }
+            else if (gameAutoPreviousStateCaptured && targetDisplay != null)
+            {
+                // 바탕화면/타 창에서 수동으로 핫키를 누른 경우: 게임 종료 및 Alt+Tab 복귀 시 돌아갈 기본 상태 갱신
+                gameAutoPreviousPresetByMonitor[monitorKey] = appliedPreset;
+                gameAutoPreviousStateByMonitor[monitorKey] = CaptureMonitorState(targetDisplay);
+            }
         }
 
         private void RefreshGlobalHotkeys()
@@ -617,6 +640,7 @@ namespace Gamma_Manager
                                 {
                                     if (string.Equals(sec, "Settings", StringComparison.OrdinalIgnoreCase) ||
                                         string.Equals(sec, "Hotkeys", StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(sec, "Screenshot", StringComparison.OrdinalIgnoreCase) ||
                                         sec.StartsWith("AutoGame_", StringComparison.OrdinalIgnoreCase) ||
                                         sec.StartsWith("__", StringComparison.OrdinalIgnoreCase))
                                         continue;
@@ -678,8 +702,10 @@ namespace Gamma_Manager
                             int nextIdx = (idx + 1) % cycleList.Count;
                             string nextPreset = cycleList[nextIdx];
 
+                            toggleStateByMonitor.Remove(monitorKey);
                             ApplyPreset(nextPreset, false, true);
                             currentPresetByMonitor[monitorKey] = nextPreset;
+                            SyncManualHotkeyWithGameAuto(targetDisplay, monitorKey, nextPreset);
 
                             string displayPresetName = nextPreset;
                             string prefix = targetDisplay.displayName + ": ";
@@ -713,6 +739,7 @@ namespace Gamma_Manager
             {
                 if (string.Equals(preset, "Settings", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(preset, "Hotkeys", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(preset, "Screenshot", StringComparison.OrdinalIgnoreCase) ||
                     preset.StartsWith("AutoGame_", StringComparison.OrdinalIgnoreCase) ||
                     preset.StartsWith("__", StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -754,12 +781,21 @@ namespace Gamma_Manager
 
                             if (IsGameAutoEnabled())
                             {
-                                string foregroundExe = GetForegroundProcessName();
+                                bool sessionEnded = !string.IsNullOrEmpty(gameAutoSessionProcess) &&
+                                                    !IsProcessRunning(gameAutoSessionProcess, gameAutoSessionPid);
+
+                                string foregroundExe = GetForegroundProcessName(out int fgPid);
                                 Display.DisplayInfo fgDisp = GetForegroundDisplay() ?? targetDisplay;
                                 bool isGameMapped = TryGetAutoMapping(foregroundExe, fgDisp, out string matchedGameProfile);
 
                                 if (isGameMapped && !string.IsNullOrEmpty(matchedGameProfile))
                                 {
+                                    if (gameAutoSessionOverrideByMonitor.TryGetValue(monitorKey, out string overrideProfile) &&
+                                        !string.IsNullOrEmpty(overrideProfile))
+                                    {
+                                        matchedGameProfile = overrideProfile;
+                                    }
+
                                     // 1. 현재 창이 게임인 경우 -> 게임 프로필로 복귀
                                     ApplyPreset(matchedGameProfile, false, true);
                                     currentPresetByMonitor[monitorKey] = matchedGameProfile;
@@ -768,16 +804,22 @@ namespace Gamma_Manager
                                     activeAutoPreset = matchedGameProfile;
                                     activeAutoMonitor = monitorKey;
                                     activeAutoProcess = foregroundExe;
+                                    gameAutoSessionProcess = foregroundExe;
+                                    gameAutoSessionPid = fgPid;
                                     handledByGameAuto = true;
                                 }
                                 else if (autoGameFocused || gameAutoPreviousStateCaptured)
                                 {
-                                    // 2. 게임이 켜진 상태에서 다른 창을 보고 있을 때 토글을 끈 경우 -> 게임 전 기본값으로 복귀
+                                    // 2. 게임이 켜진 상태에서 다른 창을 보고 있을 때(또는 게임 종료 직후) 토글을 끈 경우 -> 게임 전 기본값으로 복귀
                                     RestoreGameAutoPreviousMonitor(monitorKey);
                                     autoGameFocused = false;
                                     activeAutoPreset = null;
                                     activeAutoMonitor = null;
                                     activeAutoProcess = null;
+                                    if (sessionEnded)
+                                    {
+                                        ResetGameAutoSessionState();
+                                    }
                                     handledByGameAuto = true;
                                     visiblePreset = GetCurrentPresetForMonitor(monitorKey);
                                 }
@@ -806,7 +848,7 @@ namespace Gamma_Manager
                                     {
                                         int origB = targetDisplay.monitorBrightness;
                                         int origC = targetDisplay.monitorContrast;
-                                        if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out int bVal, out int cVal))
+                                        if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out int bVal, out int cVal, monitorKey))
                                         {
                                             origB = bVal;
                                             origC = cVal;
@@ -896,7 +938,7 @@ namespace Gamma_Manager
                             {
                                 int origB = targetDisplay.monitorBrightness;
                                 int origC = targetDisplay.monitorContrast;
-                                if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out int bVal, out int cVal))
+                                if (StartupStateManager.TryGetOriginalValues(targetDisplay.displayLink, out int bVal, out int cVal, monitorKey))
                                 {
                                     origB = bVal;
                                     origC = cVal;
@@ -948,6 +990,7 @@ namespace Gamma_Manager
 
                         ApplyPreset(capturedPreset, true, true);
                         currentPresetByMonitor[monitorKey] = capturedPreset;
+                        SyncManualHotkeyWithGameAuto(targetDisplay, monitorKey, capturedPreset);
 
                         // UI 모니터 및 프로필 자동 전환
                         SyncUIWithTargetMonitorAndPreset(targetDisplay, capturedPreset);
@@ -971,23 +1014,7 @@ namespace Gamma_Manager
 
         private static bool TryParseHotkey(string value, out Keys key, out GlobalHotkey.Modifiers modifiers)
         {
-            key = Keys.None; modifiers = GlobalHotkey.Modifiers.None;
-            if (string.IsNullOrWhiteSpace(value)) return false;
-            string[] parts = value.Split('+');
-            string keyText = parts[parts.Length - 1].Trim();
-            if (!Enum.TryParse(keyText, true, out key) || key == Keys.None) return false;
-            for (int i = 0; i < parts.Length - 1; i++)
-            {
-                switch (parts[i].Trim().ToLowerInvariant())
-                {
-                    case "ctrl": case "control": modifiers |= GlobalHotkey.Modifiers.Control; break;
-                    case "alt": modifiers |= GlobalHotkey.Modifiers.Alt; break;
-                    case "shift": modifiers |= GlobalHotkey.Modifiers.Shift; break;
-                    case "win": case "windows": modifiers |= GlobalHotkey.Modifiers.Win; break;
-                    default: return false;
-                }
-            }
-            return true;
+            return GlobalHotkey.TryParseHotkey(value, out key, out modifiers);
         }
     }
 }

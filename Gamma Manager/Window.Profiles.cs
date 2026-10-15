@@ -17,7 +17,6 @@ namespace Gamma_Manager
         private void InitializeCurrentPresetState()
         {
             currentPresetByMonitor.Clear();
-            string prefix = LanguageManager.Korean ? "기본값 - " : "Default - ";
             if (displays == null) return;
 
             foreach (Display.DisplayInfo display in displays)
@@ -31,10 +30,18 @@ namespace Gamma_Manager
                 {
                     currentPresetByMonitor[monitorKey] = defaultPreset;
 
-                    // INI에 저장되어 있는 [기본값] 프로필 수치를 모니터 객체에 즉시 동기화
-                    ProfileData profile = ProfileData.ReadFromIni(iniFile, defaultPreset, display);
-                    profile.ApplyTo(display);
-                    display.saturationDefault = display.saturation;
+                    // 시작 시점에는 현재 모니터의 실제 라이브 측정값(display.saturation 등)을 덮어쓰지 않고,
+                    // 초기화/토글 복귀 기준이 되는 saturationDefault만 INI의 [기본값]에서 읽어 동기화한다.
+                    if (int.TryParse(iniFile.Read("saturation", defaultPreset), out int defSat) && defSat >= 0)
+                    {
+                        display.saturationDefault = display.saturationSupported
+                            ? Clamp(defSat, display.saturationMin, display.saturationMax)
+                            : defSat;
+                    }
+                    else
+                    {
+                        display.saturationDefault = display.saturation;
+                    }
                 }
             }
         }
@@ -110,6 +117,7 @@ namespace Gamma_Manager
             {
                 if (string.Equals(section, "Settings", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(section, "Hotkeys", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(section, "Screenshot", StringComparison.OrdinalIgnoreCase) ||
                     section.StartsWith("AutoGame_", StringComparison.OrdinalIgnoreCase) ||
                     section.StartsWith("__", StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -205,7 +213,7 @@ namespace Gamma_Manager
 
                 int bVal = display.monitorBrightness;
                 int cVal = display.monitorContrast;
-                if (StartupStateManager.TryGetOriginalValues(display.displayLink, out int origB, out int origC))
+                if (StartupStateManager.TryGetOriginalValues(display.displayLink, out int origB, out int origC, DisplayService.GetMonitorKey(display)))
                 {
                     bVal = origB;
                     cVal = origC;
@@ -380,8 +388,8 @@ namespace Gamma_Manager
             trackBarMonitorBrightness.Enabled = enabled;
             trackBarMonitorContrast.Enabled = enabled && currDisplay != null && currDisplay.isExternal;
 
-            textBoxMonitorBrightness.Enabled = true;
-            textBoxMonitorContrast.Enabled = currDisplay != null && currDisplay.isExternal;
+            textBoxMonitorBrightness.Enabled = enabled;
+            textBoxMonitorContrast.Enabled = enabled && currDisplay != null && currDisplay.isExternal;
             buttonReset.Enabled = true;
 
             if (enabled && currDisplay != null)
@@ -566,10 +574,8 @@ namespace Gamma_Manager
                 Display.DisplayInfo targetDisplay = displays[displayIndex];
                 string monitorKey = DisplayService.GetMonitorKey(targetDisplay);
 
-                int thisApplyGeneration = displayService != null ? displayService.NextGeneration(monitorKey) : 0;
-
                 currentPresetByMonitor[monitorKey] = actualSection;
-                iniFile.Write("LastProfile_" + monitorName, actualSection, "Settings");
+                iniFile.Write("LastProfile_" + targetDisplay.displayName, actualSection, "Settings");
 
                 if (switchMonitor)
                 {
@@ -592,6 +598,7 @@ namespace Gamma_Manager
                 fillInfo(currDisplay);
                 clearColors();
                 allColors = true;
+                UpdateColorChannelButtonStyles();
                 UpdateShadowBoostButtonState();
 
                 if (comboBoxPresets != null)
@@ -611,10 +618,7 @@ namespace Gamma_Manager
                 }
 
                 // 프로필 적용 시작 시 세대 번호를 올려 이전 리셋/복원 비동기 작업을 즉시 무효화
-                if (displayService != null)
-                {
-                    thisApplyGeneration = displayService.NextGeneration(monitorKey);
-                }
+                int thisApplyGeneration = displayService != null ? displayService.NextGeneration(monitorKey) : 0;
 
                 int targetTopologyGen = displayService != null ? displayService.CurrentTopologyGeneration : 0;
 

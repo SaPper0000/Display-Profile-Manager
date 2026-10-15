@@ -1,19 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace Gamma_Manager
 {
     internal sealed class HotkeySettingsForm : Form
     {
-        [DllImport("user32.dll")]
-        private static extern short GetAsyncKeyState(int vKey);
-
-        private const int VK_LWIN = 0x5B;
-        private const int VK_RWIN = 0x5C;
-
         private sealed class Row
         {
             public string Preset;
@@ -32,6 +25,7 @@ namespace Gamma_Manager
         private readonly FlowLayoutPanel panel;
         private readonly Label status;
         private string capturePreset;
+        private bool _winKeyHeld = false;
         internal bool ChangesSaved { get; private set; }
 
         public const string HARD_RESET_ALL_PRESET = "__HARD_RESET_ALL__";
@@ -42,13 +36,25 @@ namespace Gamma_Manager
         public HotkeySettingsForm(IniFile iniFile, string[] presets, List<Display.DisplayInfo> displays)
         {
             this.iniFile = iniFile;
+            Deactivate += (s, e) =>
+            {
+                _winKeyHeld = false;
+                if (!string.IsNullOrEmpty(capturePreset))
+                {
+                    string p = capturePreset;
+                    capturePreset = null;
+                    Row r = rows.Find(x => x.Preset == p);
+                    if (r != null) UpdateButton(r);
+                    status.Text = LanguageManager.Korean ? "포커스가 이동되어 키 입력 대기가 취소되었습니다." : "Capture cancelled due to lost focus.";
+                }
+            };
+
             Text = LanguageManager.Korean ? "핫키 설정" : "Hotkey Settings";
             StartPosition = FormStartPosition.CenterParent;
-            MinimumSize = new Size(720, 520);
-            Size = new Size(720, 520);
+            MinimumSize = new Size(720, 535);
+            Size = new Size(720, 535);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             KeyPreview = true;
-            KeyDown += HotkeySettingsForm_KeyDown;
             MaximizeBox = false; MinimizeBox = false;
 
             Label info = new Label
@@ -57,26 +63,40 @@ namespace Gamma_Manager
                     ? "프로필별 글로벌 핫키를 지정하세요.\r\n'순환'에 체크한 프로필들은 [모니터 프로필 순환] 핫키를 누를 때마다 차례대로 적용됩니다."
                     : "Assign global hotkeys.\r\nProfiles with 'Cycle' checked will cycle sequentially when the Cycle hotkey is pressed.",
                 AutoSize = true,
-                Location = new Point(12, 12)
+                Location = new Point(12, 10)
             };
+
+            // 키 조합 팁 안내 라벨 (컨트롤 알트, 쉬프트, 윈도우 키 조합 가능 안내)
+            Label keyTip = new Label
+            {
+                Text = LanguageManager.Korean
+                    ? "💡 Ctrl, Alt, Shift, Windows 키와 함께 눌러 원하는 키 조합으로 지정할 수 있습니다. (ESC: 해제)"
+                    : "💡 Combinable with Ctrl, Alt, Shift, or Win keys. (ESC: Clear hotkey)",
+                AutoSize = true,
+                Location = new Point(12, 45),
+                Font = new Font("Segoe UI", 9.2f, FontStyle.Bold),
+                Tag = "Highlight",
+                ForeColor = ThemeManager.AccentText
+            };
+            createdFonts.Add(keyTip.Font);
 
             // 목록 패널 높이 및 위치
             panel = new FlowLayoutPanel
             {
-                Location = new Point(12, 60),
-                Size = new Size(680, 325),
+                Location = new Point(12, 68),
+                Size = new Size(680, 318),
                 AutoScroll = true,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
-            status = new Label { AutoSize = true, Location = new Point(12, 392) };
+            status = new Label { AutoSize = true, Location = new Point(12, 394) };
 
             // 좌측 하단 2줄 줄바꿈 및 강조 색상(골드/노랑) 패널
             Panel noticeBox = new Panel
             {
-                Location = new Point(14, 420),
+                Location = new Point(14, 422),
                 Size = new Size(465, 48),
                 BackColor = Color.Transparent
             };
@@ -130,13 +150,13 @@ namespace Gamma_Manager
             };
 
             // 저장 / 취소 버튼
-            Button save = new Button { Text = LanguageManager.Korean ? "저장" : "Save", Size = new Size(90, 34), Location = new Point(492, 426) };
+            Button save = new Button { Text = LanguageManager.Korean ? "저장" : "Save", Size = new Size(90, 34), Location = new Point(492, 428) };
             save.Click += delegate { SaveAndClose(); };
 
-            Button cancel = new Button { Text = LanguageManager.Korean ? "취소" : "Cancel", Size = new Size(90, 34), Location = new Point(592, 426) };
+            Button cancel = new Button { Text = LanguageManager.Korean ? "취소" : "Cancel", Size = new Size(90, 34), Location = new Point(592, 428) };
             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
 
-            Controls.AddRange(new Control[] { info, panel, status, noticeBox, save, cancel });
+            Controls.AddRange(new Control[] { info, keyTip, panel, status, noticeBox, save, cancel });
 
             // 1. 전체 초기화 핫키
             AddSpecialRow(HARD_RESET_ALL_PRESET, LanguageManager.Korean ? "🔄 모든 디스플레이 초기화" : "🔄 Reset All Displays", false);
@@ -230,122 +250,174 @@ namespace Gamma_Manager
 
         private void BeginCapture(Row row, string displayName)
         {
+            if (!string.IsNullOrEmpty(capturePreset) && capturePreset != row.Preset)
+            {
+                Row prevRow = rows.Find(x => x.Preset == capturePreset);
+                if (prevRow != null) UpdateButton(prevRow);
+            }
+
             capturePreset = row.Preset;
-            status.Text = LanguageManager.Korean ? $"[{displayName}] 원하는 키를 누르세요. ESC = 핫키 해제" : $"[{displayName}] Press a key combination. ESC = clear hotkey";
+            _winKeyHeld = false;
+            status.Text = LanguageManager.Korean
+                ? $"[{displayName}] 원하는 키를 누르세요. (Ctrl / Alt / Shift / Win 조합 가능, ESC = 해제)"
+                : $"[{displayName}] Press key combination. (Ctrl/Alt/Shift/Win combinable, ESC = Clear)";
             row.SetButton.Text = LanguageManager.Korean ? "키 입력 대기..." : "Waiting for key...";
-            KeyPreview = true; ActiveControl = null; Focus();
+            KeyPreview = true;
+            ActiveControl = null;
+            Focus();
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (!string.IsNullOrEmpty(capturePreset))
+            {
+                if (GlobalHotkey.TryExtractHotkeyFromCmdKey(ref msg, keyData, ref _winKeyHeld, out Keys keyCode, out GlobalHotkey.Modifiers modifiers))
+                {
+                    ApplyCapturedHotkey(keyCode, modifiers);
+                }
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.LWin || e.KeyCode == Keys.RWin)
+            {
+                _winKeyHeld = false;
+            }
+            else if (!string.IsNullOrEmpty(capturePreset) &&
+                     (e.KeyCode == Keys.PrintScreen || e.KeyCode == Keys.Pause))
+            {
+                GlobalHotkey.Modifiers modifiers = GlobalHotkey.GetModifiersFromKeyData(e.KeyData, _winKeyHeld);
+                _winKeyHeld = false;
+                ApplyCapturedHotkey(e.KeyCode, modifiers);
+                e.Handled = true;
+                return;
+            }
+
+            base.OnKeyUp(e);
+        }
+
+        private void ApplyCapturedHotkey(Keys keyCode, GlobalHotkey.Modifiers modifiers)
+        {
+            if (string.IsNullOrEmpty(capturePreset)) return;
+            string targetPreset = capturePreset;
+            capturePreset = null;
+            _winKeyHeld = false;
+
+            Row row = rows.Find(r => r.Preset == targetPreset);
+            if (row == null) return;
+
+            if (keyCode == Keys.Escape)
+            {
+                row.Key = Keys.None;
+                row.Modifiers = GlobalHotkey.Modifiers.None;
+                UpdateButton(row);
+                status.Text = LanguageManager.Korean ? "핫키가 해제되었습니다. 저장을 눌러 적용하세요." : "Hotkey cleared. Click Save to apply.";
+                return;
+            }
+
+            // 1. 즉시 볼륨 전환 단축키와 중복 검사
+            string volDuckHk = iniFile.Read("VolumeDuckHotkey", "Settings");
+            if (TryParseHotkey(volDuckHk, out Keys vKey, out GlobalHotkey.Modifiers vMods))
+            {
+                if (vKey == keyCode && vMods == modifiers)
+                {
+                    string volDuckName = LanguageManager.Korean ? "즉시 볼륨 전환" : "Quick Volume Switch";
+                    MessageBox.Show(
+                        LanguageManager.Korean
+                            ? $"이미 [{volDuckName}]에 등록된 핫키입니다.\r\n다른 키로 등록해주세요."
+                            : $"This hotkey is already registered to [{volDuckName}].\r\nPlease choose another key.",
+                        LanguageManager.Korean ? "핫키 중복" : "Duplicate Hotkey",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    UpdateButton(row);
+                    return;
+                }
+            }
+
+            // 2. 다른 프로필 및 특수 핫키와의 중복 검사
+            Row conflict = rows.Find(r => r != row && r.Key == keyCode && r.Modifiers == modifiers);
+            if (conflict != null)
+            {
+                string conflictName;
+                if (conflict.Preset == SCREENSHOT_PRESET)
+                    conflictName = LanguageManager.Korean ? "화면 필터 스크린샷" : "Filtered Screenshot";
+                else if (conflict.Preset == HARD_RESET_ALL_PRESET)
+                    conflictName = LanguageManager.Korean ? "모든 디스플레이 초기화" : "Reset All Displays";
+                else if (conflict.Preset.StartsWith(HARD_RESET_SINGLE_PREFIX, StringComparison.OrdinalIgnoreCase))
+                    conflictName = LanguageManager.Korean ? "모니터 초기화" : "Reset Monitor";
+                else if (conflict.Preset.StartsWith(CYCLE_SINGLE_PREFIX, StringComparison.OrdinalIgnoreCase))
+                    conflictName = LanguageManager.Korean ? "프로필 순환" : "Cycle Profiles";
+                else
+                    conflictName = conflict.Preset;
+
+                DialogResult result = MessageBox.Show(
+                    LanguageManager.Korean ? $"이 핫키는 [{conflictName}]에 지정되어 있습니다.\r\n변경하시겠습니까?" : $"Hotkey in use by [{conflictName}]. Change it?",
+                    LanguageManager.Korean ? "핫키 중복" : "Duplicate", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result != DialogResult.Yes)
+                {
+                    UpdateButton(row);
+                    return;
+                }
+                conflict.Key = Keys.None;
+                conflict.Modifiers = GlobalHotkey.Modifiers.None;
+                UpdateButton(conflict);
+            }
+
+            // 3. 외부 백그라운드 프로그램(AMD Software, 지포스 익스피리언스, 스팀, 디스코드 등) 선점 여부 사전 검사
+            if (!GlobalHotkey.IsHotkeyAvailableInOS(this.Handle, keyCode, modifiers, out int win32Error))
+            {
+                string hkText = FormatHotkey(keyCode, modifiers);
+                string warnMsg = LanguageManager.Korean
+                    ? $"[안내] 단축키 [{hkText}]는 다른 백그라운드 프로그램(AMD Software, 지포스 섀도우플레이, 디스코드, 스팀 등)에서 이미 전역 단축키로 선점 중인 것으로 감지되었습니다.\r\n\r\n이대로 등록하면 해당 프로그램과 겹치거나 핫키가 정상 동작하지 않을 수 있습니다.\r\n그래도 이 단축키로 진행하시겠습니까?"
+                    : $"[Notice] Hotkey [{hkText}] appears to be already in use by another application (AMD Software, GeForce ShadowPlay, Discord, Steam, etc.).\r\n\r\nDo you still wish to proceed with this hotkey?";
+
+                DialogResult dr = MessageBox.Show(
+                    warnMsg,
+                    LanguageManager.Korean ? "단축키 선점 감지" : "Hotkey Conflict Detected",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (dr != DialogResult.Yes)
+                {
+                    UpdateButton(row);
+                    return;
+                }
+            }
+
+            row.Key = keyCode;
+            row.Modifiers = modifiers;
+            UpdateButton(row);
+            status.Text = LanguageManager.Korean
+                ? $"[{row.Preset}] 핫키가 설정되었습니다. 저장을 눌러 적용하세요."
+                : $"[{row.Preset}] Hotkey assigned. Click Save to apply.";
         }
 
         private void ClearHotkey(Row row, string displayName)
         {
-            if (capturePreset == row.Preset) capturePreset = null;
+            if (capturePreset == row.Preset)
+            {
+                capturePreset = null;
+                _winKeyHeld = false;
+            }
             row.Key = Keys.None; row.Modifiers = GlobalHotkey.Modifiers.None;
             UpdateButton(row);
             status.Text = LanguageManager.Korean ? $"[{displayName}] 핫키가 해제되었습니다. 저장을 눌러 적용하세요." : $"[{displayName}] Hotkey cleared. Click Save to apply.";
-        }
-
-        private void HotkeySettingsForm_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (string.IsNullOrEmpty(capturePreset)) return;
-            Row row = rows.Find(r => r.Preset == capturePreset);
-            if (row == null) return;
-
-            if (e.KeyCode == Keys.ControlKey || e.KeyCode == Keys.Menu || e.KeyCode == Keys.ShiftKey || e.KeyCode == Keys.LWin || e.KeyCode == Keys.RWin)
-            { e.SuppressKeyPress = true; return; }
-
-            if (e.KeyCode == Keys.Escape)
-            {
-                row.Key = Keys.None; row.Modifiers = GlobalHotkey.Modifiers.None;
-            }
-            else
-            {
-                GlobalHotkey.Modifiers modifiers = GlobalHotkey.Modifiers.None;
-                if (e.Control) modifiers |= GlobalHotkey.Modifiers.Control;
-                if (e.Alt) modifiers |= GlobalHotkey.Modifiers.Alt;
-                if (e.Shift) modifiers |= GlobalHotkey.Modifiers.Shift;
-
-                // Win API를 통해 LWin / RWin 상태 직접 검사
-                bool lWinDown = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0;
-                bool rWinDown = (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
-                if (lWinDown || rWinDown) modifiers |= GlobalHotkey.Modifiers.Win;
-
-                // 즉시 볼륨 낮추기 핫키와 중복 검사
-                string volDuckHk = iniFile.Read("VolumeDuckHotkey", "Settings");
-                if (TryParseHotkey(volDuckHk, out Keys vKey, out GlobalHotkey.Modifiers vMods))
-                {
-                    if (vKey == e.KeyCode && vMods == modifiers)
-                    {
-                        string volDuckName = LanguageManager.Korean ? "즉시 볼륨 전환" : "Quick Volume Switch";
-                        MessageBox.Show(
-                            LanguageManager.Korean
-                                ? $"이미 [{volDuckName}]에 등록된 핫키입니다.\r\n다른 키로 등록해주세요."
-                                : $"This hotkey is already registered to [{volDuckName}].\r\nPlease choose another key.",
-                            LanguageManager.Korean ? "핫키 중복" : "Duplicate Hotkey",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Warning);
-                        e.SuppressKeyPress = true;
-                        return;
-                    }
-                }
-
-                Row conflict = rows.Find(r => r != row && r.Key == e.KeyCode && r.Modifiers == modifiers);
-                if (conflict != null)
-                {
-                    string conflictName;
-                    if (conflict.Preset == SCREENSHOT_PRESET)
-                        conflictName = LanguageManager.Korean ? "화면 필터 스크린샷" : "Filtered Screenshot";
-                    else if (conflict.Preset == HARD_RESET_ALL_PRESET)
-                        conflictName = LanguageManager.Korean ? "모든 디스플레이 초기화" : "Reset All Displays";
-                    else if (conflict.Preset.StartsWith(HARD_RESET_SINGLE_PREFIX, StringComparison.OrdinalIgnoreCase))
-                        conflictName = LanguageManager.Korean ? "모니터 초기화" : "Reset Monitor";
-                    else if (conflict.Preset.StartsWith(CYCLE_SINGLE_PREFIX, StringComparison.OrdinalIgnoreCase))
-                        conflictName = LanguageManager.Korean ? "프로필 순환" : "Cycle Profiles";
-                    else
-                        conflictName = conflict.Preset;
-
-                    DialogResult result = MessageBox.Show(
-                        LanguageManager.Korean ? $"이 핫키는 [{conflictName}]에 지정되어 있습니다.\r\n변경하시겠습니까?" : $"Hotkey in use by [{conflictName}]. Change it?",
-                        LanguageManager.Korean ? "핫키 중복" : "Duplicate", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                    if (result != DialogResult.Yes) { e.SuppressKeyPress = true; return; }
-                    conflict.Key = Keys.None; conflict.Modifiers = GlobalHotkey.Modifiers.None; UpdateButton(conflict);
-                }
-                row.Key = e.KeyCode; row.Modifiers = modifiers;
-            }
-            UpdateButton(row); capturePreset = null; status.Text = ""; e.SuppressKeyPress = true;
         }
 
         private void UpdateButton(Row row) { row.SetButton.Text = FormatHotkey(row.Key, row.Modifiers); }
 
         private static string FormatHotkey(Keys key, GlobalHotkey.Modifiers modifiers)
         {
-            if (key == Keys.None) return LanguageManager.Korean ? "없음 (지정)" : "None (Set)";
-            string text = "";
-            if ((modifiers & GlobalHotkey.Modifiers.Control) != 0) text += "Ctrl + ";
-            if ((modifiers & GlobalHotkey.Modifiers.Alt) != 0) text += "Alt + ";
-            if ((modifiers & GlobalHotkey.Modifiers.Shift) != 0) text += "Shift + ";
-            if ((modifiers & GlobalHotkey.Modifiers.Win) != 0) text += "Win + ";
-            return text + key.ToString();
+            return GlobalHotkey.FormatHotkey(key, modifiers);
         }
 
         private static bool TryParseHotkey(string value, out Keys key, out GlobalHotkey.Modifiers modifiers)
         {
-            key = Keys.None; modifiers = GlobalHotkey.Modifiers.None;
-            if (string.IsNullOrWhiteSpace(value)) return false;
-            string[] parts = value.Split('+');
-            string keyText = parts[parts.Length - 1].Trim();
-            if (!Enum.TryParse(keyText, true, out key) || key == Keys.None) return false;
-            for (int i = 0; i < parts.Length - 1; i++)
-            {
-                switch (parts[i].Trim().ToLowerInvariant())
-                {
-                    case "ctrl": case "control": modifiers |= GlobalHotkey.Modifiers.Control; break;
-                    case "alt": modifiers |= GlobalHotkey.Modifiers.Alt; break;
-                    case "shift": modifiers |= GlobalHotkey.Modifiers.Shift; break;
-                    case "win": case "windows": modifiers |= GlobalHotkey.Modifiers.Win; break;
-                    default: return false;
-                }
-            }
-            return true;
+            return GlobalHotkey.TryParseHotkey(value, out key, out modifiers);
         }
 
         private void SaveAndClose()

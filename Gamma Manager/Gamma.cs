@@ -62,15 +62,19 @@ namespace Gamma_Manager
 
             shadowBoost = Math.Max(0, Math.Min(100, shadowBoost));
 
+            double rTint = shadowBoostTint == 1 ? 1.08 : (shadowBoostTint == 2 ? 0.92 : 1.0);
+            double gTint = 1.0;
+            double bTint = shadowBoostTint == 1 ? 0.92 : (shadowBoostTint == 2 ? 1.08 : 1.0);
+
             ushort[,] ramp = new ushort[3, 256];
 
             for (int i = 0; i < 256; i++)
             {
                 double input = i / 255.0;
 
-                ramp[0, i] = CreateChannelValue(input, rGamma, rContrast, rBright, shadowBoost, shadowBoostMode, 1.0, highlightGuard, customPeak, customWidth);
-                ramp[1, i] = CreateChannelValue(input, gGamma, gContrast, gBright, shadowBoost, shadowBoostMode, 1.0, highlightGuard, customPeak, customWidth);
-                ramp[2, i] = CreateChannelValue(input, bGamma, bContrast, bBright, shadowBoost, shadowBoostMode, 1.0, highlightGuard, customPeak, customWidth);
+                ramp[0, i] = CreateChannelValue(input, rGamma, rContrast, rBright, shadowBoost, shadowBoostMode, rTint, highlightGuard, customPeak, customWidth);
+                ramp[1, i] = CreateChannelValue(input, gGamma, gContrast, gBright, shadowBoost, shadowBoostMode, gTint, highlightGuard, customPeak, customWidth);
+                ramp[2, i] = CreateChannelValue(input, bGamma, bContrast, bBright, shadowBoost, shadowBoostMode, bTint, highlightGuard, customPeak, customWidth);
             }
 
             // First make the mathematical curves valid and monotonic.
@@ -166,6 +170,10 @@ namespace Gamma_Manager
                         break;
                 }
 
+                if (Math.Abs(tintMultiplier - 1.0) > 1e-6)
+                {
+                    lift *= tintMultiplier;
+                }
                 input = Clamp01(input + lift);
             }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Drawing;
@@ -137,8 +138,8 @@ namespace Gamma_Manager
         private void ApplyLanguage()
         {
             bool ko = LanguageManager.Korean;
-            Text = "Display Profile Manager v1.5.7";
-            notifyIcon.Text = "Display Profile Manager v1.5.7";
+            Text = "Display Profile Manager v1.5.8";
+            notifyIcon.Text = "Display Profile Manager v1.5.8";
 
             buttonRed.Text = ko ? "빨강" : "Red";
             buttonGreen.Text = ko ? "초록" : "Green";
@@ -646,6 +647,9 @@ namespace Gamma_Manager
             string currentPreset = comboBoxPresets != null ? comboBoxPresets.Text : null;
             string monitorName = currDisplay != null ? currDisplay.displayName : null;
 
+            string oldDefaultPrefix = korean ? "Default - " : "기본값 - ";
+            string newDefaultPrefix = korean ? "기본값 - " : "Default - ";
+
             LanguageManager.SetLanguage(korean);
             if (iniFile != null)
             {
@@ -655,10 +659,18 @@ namespace Gamma_Manager
 
             if (!string.IsNullOrEmpty(currentPreset) && !string.IsNullOrEmpty(monitorName))
             {
-                string oldDefaultPrefix = korean ? "Default - " : "기본값 - ";
-                string newDefaultPrefix = korean ? "기본값 - " : "Default - ";
                 if (currentPreset.StartsWith(oldDefaultPrefix, StringComparison.Ordinal))
                     currentPreset = newDefaultPrefix + monitorName;
+            }
+
+            // 언어 전환 시 모니터별 활성 프로필 상태(currentPresetByMonitor)를 초기화하지 않고 기본값 접두사만 갱신하여 순환/토글 문맥 유지
+            foreach (string key in currentPresetByMonitor.Keys.ToList())
+            {
+                string val = currentPresetByMonitor[key];
+                if (!string.IsNullOrEmpty(val) && val.StartsWith(oldDefaultPrefix, StringComparison.Ordinal))
+                {
+                    currentPresetByMonitor[key] = newDefaultPrefix + val.Substring(oldDefaultPrefix.Length);
+                }
             }
 
             ApplyLanguage();
@@ -667,7 +679,6 @@ namespace Gamma_Manager
 
             if (currDisplay != null)
             {
-                currentPresetByMonitor.Clear();
                 initPresets(currentPreset);
                 fillInfo(currDisplay);
             }
@@ -696,9 +707,18 @@ namespace Gamma_Manager
                 if (string.Equals(section, newName, StringComparison.Ordinal)) continue;
 
                 if (string.IsNullOrEmpty(iniFile.Read("monitor", newName)))
+                {
                     iniFile.RenameSection(section, newName);
+                }
                 else
+                {
+                    // 양쪽 섹션이 모두 존재하는 경우, 직전 언어 섹션의 최신 설정값을 새 언어 섹션으로 병합 후 제거
+                    foreach (string key in iniFile.GetKeys(section))
+                    {
+                        iniFile.Write(key, iniFile.Read(key, section), newName);
+                    }
                     iniFile.DeleteSection(section);
+                }
             }
         }
 

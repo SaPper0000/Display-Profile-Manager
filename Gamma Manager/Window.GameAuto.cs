@@ -22,7 +22,13 @@ namespace Gamma_Manager
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool QueryFullProcessImageName(IntPtr hProcess, uint dwFlags, StringBuilder lpExeName, ref uint lpdwSize);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetExitCodeProcess(IntPtr hProcess, out uint lpExitCode);
+
         private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+        private const uint STILL_ACTIVE = 259;
+        private const int ERROR_INVALID_PARAMETER = 87;
 
         private IntPtr gameAutoWinEventHook = IntPtr.Zero;
         private WinApi.WinEventDelegate gameAutoWinEventDelegate = null;
@@ -37,6 +43,8 @@ namespace Gamma_Manager
 
         private readonly Dictionary<string, string> gameAutoPreviousPresetByMonitor = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MonitorStateSnapshot> gameAutoPreviousStateByMonitor = new Dictionary<string, MonitorStateSnapshot>(StringComparer.OrdinalIgnoreCase);
+        // 인게임 도중 사용자가 일반 적용(Apply) 또는 순환(Cycle) 핫키로 변경한 프로필을 게임 세션 동안 유지
+        private readonly Dictionary<string, string> gameAutoSessionOverrideByMonitor = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private bool gameAutoPreviousStateCaptured = false;
         private int gameAutoEvaluationPending = 0;
 
@@ -116,6 +124,12 @@ namespace Gamma_Manager
             if (autoGameFocused && !string.IsNullOrEmpty(activeAutoMonitor))
                 RestoreGameAutoPreviousMonitor(activeAutoMonitor);
 
+            ResetGameAutoSessionState();
+            UpdateGameAutoButtonState();
+        }
+
+        private void ResetGameAutoSessionState()
+        {
             autoGameFocused = false;
             activeAutoPreset = null;
             activeAutoMonitor = null;
@@ -124,9 +138,8 @@ namespace Gamma_Manager
             gameAutoSessionPid = 0;
             gameAutoPreviousPresetByMonitor.Clear();
             gameAutoPreviousStateByMonitor.Clear();
+            gameAutoSessionOverrideByMonitor.Clear();
             gameAutoPreviousStateCaptured = false;
-
-            UpdateGameAutoButtonState();
         }
 
         private void GameAutoWinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint idEventThread, uint msEventTime)
@@ -367,45 +380,58 @@ namespace Gamma_Manager
             }
         }
 
+        /// <summary>
+        /// 안티치트(BattlEye, Vanguard, EAC)가 차단하는 PROCESS_QUERY_INFORMATION(0x0400) | SYNCHRONIZE 요청(.NET Process.HasExited) 대신,
+        /// 허용된 최소 권한인 PROCESS_QUERY_LIMITED_INFORMATION(0x1000)과 GetExitCodeProcess만으로 안전하게 프로세스 생존을 확인합니다.
+        /// </summary>
         private bool IsProcessRunning(string exeName, int pid = 0)
         {
             if (string.IsNullOrEmpty(exeName)) return false;
+            string targetName = Path.GetFileNameWithoutExtension(exeName);
 
-            // 1단계: 기억된 PID로 O(1) 초고속 생존 및 프로세스명 확인
+            // 1단계: 기억된 PID로 최소 권한(0x1000) 핸들을 열어 O(1) 초고속 생존 및 프로세스명 확인
             if (pid > 0)
             {
-                try
+                IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)pid);
+                if (hProcess != IntPtr.Zero)
                 {
-                    using (Process p = Process.GetProcessById(pid))
+                    try
                     {
-                        if (!p.HasExited)
+                        if (!GetExitCodeProcess(hProcess, out uint exitCode) || exitCode != STILL_ACTIVE)
+                            return false;
+
+                        uint capacity = 1024;
+                        StringBuilder sb = new StringBuilder((int)capacity);
+                        if (QueryFullProcessImageName(hProcess, 0, sb, ref capacity))
                         {
-                            string targetName = Path.GetFileNameWithoutExtension(exeName);
-                            if (string.Equals(p.ProcessName, targetName, StringComparison.OrdinalIgnoreCase))
-                                return true;
+                            string runningName = Path.GetFileNameWithoutExtension(sb.ToString());
+                            return string.Equals(runningName, targetName, StringComparison.OrdinalIgnoreCase);
                         }
+
+                        return true;
+                    }
+                    finally
+                    {
+                        CloseHandle(hProcess);
                     }
                 }
-                catch (ArgumentException)
+                else
                 {
-                    // 프로세스가 이미 종료됨
-                    return false;
-                }
-                catch
-                {
-                    // 권한 부족 등의 경우 아래의 2단계 전체 검색으로 폴백
+                    // ERROR_INVALID_PARAMETER(87)는 해당 PID 프로세스가 이미 종료되어 OS에 존재하지 않음을 의미
+                    int win32Err = Marshal.GetLastWin32Error();
+                    if (win32Err == ERROR_INVALID_PARAMETER)
+                        return false;
                 }
             }
 
-            // 2단계: PID가 없거나 확인 불가 시 전체 목록 검색
+            // 2단계: PID가 없거나 예외적인 경우에만 전체 목록 검색
             try
             {
-                string name = Path.GetFileNameWithoutExtension(exeName);
-                Process[] procs = Process.GetProcessesByName(name);
+                Process[] procs = Process.GetProcessesByName(targetName);
                 bool exists = procs.Length > 0;
                 foreach (Process p in procs)
                 {
-                    p.Dispose();
+                    try { p.Dispose(); } catch { }
                 }
                 return exists;
             }
@@ -432,44 +458,68 @@ namespace Gamma_Manager
                     RestoreGameAutoPreviousMonitor(activeAutoMonitor);
                     autoGameFocused = false;
                 }
-                activeAutoPreset = null;
-                activeAutoMonitor = null;
-                activeAutoProcess = null;
-                gameAutoSessionProcess = null;
-                gameAutoSessionPid = 0;
-                gameAutoPreviousPresetByMonitor.Clear();
-                gameAutoPreviousStateByMonitor.Clear();
-                gameAutoPreviousStateCaptured = false;
+                ResetGameAutoSessionState();
             }
 
             bool mapped = TryGetAutoMapping(foreground, fgDisplay, out string matchedProfile);
 
             // 핫키/토글 활성 여부 검사 (핫키 우선)
+            ToggleState tState = null;
             bool toggleActiveOnFg = !string.IsNullOrEmpty(fgMonitorKey) &&
-                                    toggleStateByMonitor.TryGetValue(fgMonitorKey, out ToggleState tState) &&
+                                    toggleStateByMonitor.TryGetValue(fgMonitorKey, out tState) &&
                                     tState != null && !string.IsNullOrEmpty(tState.ActivePreset);
 
             if (mapped && toggleActiveOnFg)
             {
+                if (!gameAutoPreviousStateCaptured)
+                {
+                    CaptureGameAutoPreviousState();
+                    // 토글이 켜진 상태에서 게임이 시작된 경우, 토글 이전 상태를 게임 전 상태에 반영
+                    if (tState.ReturnState != null)
+                        gameAutoPreviousStateByMonitor[fgMonitorKey] = tState.ReturnState;
+                    if (!string.IsNullOrEmpty(tState.ReturnPreset))
+                        gameAutoPreviousPresetByMonitor[fgMonitorKey] = tState.ReturnPreset;
+                    else
+                        gameAutoPreviousPresetByMonitor.Remove(fgMonitorKey);
+                }
+
                 autoGameFocused = true;
                 activeAutoMonitor = fgMonitorKey;
                 activeAutoProcess = foreground;
+                gameAutoSessionProcess = foreground;
+                gameAutoSessionPid = fgPid;
                 return;
             }
 
             if (mapped)
             {
+                // 다른 매핑된 게임으로 전환된 경우 인게임 핫키 오버라이드 초기화
+                if (!string.IsNullOrEmpty(gameAutoSessionProcess) &&
+                    !string.Equals(gameAutoSessionProcess, foreground, StringComparison.OrdinalIgnoreCase))
+                {
+                    gameAutoSessionOverrideByMonitor.Clear();
+                }
+
+                // 인게임 중 사용자가 일반(Apply)/순환(Cycle) 핫키로 직접 선택한 프로필이 있으면 세션 동안 우선 유지
+                if (!string.IsNullOrEmpty(fgMonitorKey) &&
+                    gameAutoSessionOverrideByMonitor.TryGetValue(fgMonitorKey, out string overrideProfile) &&
+                    !string.IsNullOrEmpty(overrideProfile))
+                {
+                    matchedProfile = overrideProfile;
+                }
+
                 if (!autoGameFocused && !gameAutoPreviousStateCaptured)
                 {
                     CaptureGameAutoPreviousState();
-                    gameAutoSessionProcess = foreground;
-                    gameAutoSessionPid = fgPid;
                 }
                 else if (!string.IsNullOrEmpty(activeAutoMonitor) && !string.Equals(activeAutoMonitor, fgMonitorKey, StringComparison.OrdinalIgnoreCase))
                 {
                     RestoreGameAutoPreviousMonitor(activeAutoMonitor);
                     autoGameFocused = false;
                 }
+
+                gameAutoSessionProcess = foreground;
+                gameAutoSessionPid = fgPid;
 
                 if (!autoGameFocused || !string.Equals(activeAutoPreset, matchedProfile, StringComparison.Ordinal) ||
                       !string.Equals(activeAutoMonitor, fgMonitorKey, StringComparison.OrdinalIgnoreCase))

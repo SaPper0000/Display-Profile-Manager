@@ -68,22 +68,27 @@ namespace Gamma_Manager
                 Logger.Info("Second launch detected; bringing existing window to front.");
 
                 // 브로드캐스트 메시지를 전송하여 트레이로 숨겨진 메인 윈도우도 즉시 복원되도록 요청
-                PostMessage(HWND_BROADCAST, WM_DPM_RESTORE, IntPtr.Zero, IntPtr.Zero);
+                bool broadcastSent = PostMessage(HWND_BROADCAST, WM_DPM_RESTORE, IntPtr.Zero, IntPtr.Zero);
 
                 // 현재 실행 중인 동일 프로세스를 탐색하여 메인 윈도우 핸들 취득 시도
                 System.Diagnostics.Process current = System.Diagnostics.Process.GetCurrentProcess();
                 System.Diagnostics.Process[] processes = null;
                 IntPtr hWnd = IntPtr.Zero;
+                bool foundOtherProcess = false;
 
                 try
                 {
                     processes = System.Diagnostics.Process.GetProcessesByName(current.ProcessName);
                     foreach (System.Diagnostics.Process p in processes)
                     {
-                        if (p.Id != current.Id && p.MainWindowHandle != IntPtr.Zero)
+                        if (p.Id != current.Id)
                         {
-                            hWnd = p.MainWindowHandle;
-                            break;
+                            foundOtherProcess = true;
+                            if (p.MainWindowHandle != IntPtr.Zero)
+                            {
+                                hWnd = p.MainWindowHandle;
+                                break;
+                            }
                         }
                     }
                 }
@@ -104,17 +109,17 @@ namespace Gamma_Manager
                     ShowWindow(hWnd, SW_RESTORE);
                     SetForegroundWindow(hWnd);
                 }
-                else
+                else if (!foundOtherProcess || !broadcastSent)
                 {
-                    var iniFile = new IniFile();
+                    var iniFile = IniFile.Shared;
                     string savedLanguage = iniFile.Read("Language", "Settings");
                     bool korean = !string.Equals(savedLanguage, "English", StringComparison.OrdinalIgnoreCase);
 
                     MessageBox.Show(
-                   korean ? "프로그램이 이미 실행 중입니다." : "The program is already running.",
-                   "Display Profile Manager",
-                   MessageBoxButtons.OK,
-                   MessageBoxIcon.Information);
+                        korean ? "프로그램이 이미 실행 중입니다." : "The program is already running.",
+                        "Display Profile Manager",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
                 }
 
                 _singleInstanceMutex.Dispose();

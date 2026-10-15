@@ -14,6 +14,8 @@ namespace Gamma_Manager
 {
     public partial class Window : Form
     {
+        internal static Window MainInstance { get; private set; }
+
         // 1. 클래스 상단 필드에 캐싱용 변수 선언
         private Font _cachedRegularFont;
         private Font _cachedBoldFont;
@@ -23,6 +25,7 @@ namespace Gamma_Manager
 
         public Window()
         {
+            MainInstance = this;
             InitializeComponent();
 
             // 2. 폰트 객체를 딱 1번만 생성해서 보관
@@ -121,8 +124,8 @@ namespace Gamma_Manager
             buttonGreen.Font = _cachedRegularFont;
             buttonBlue.Font = _cachedRegularFont;
 
-            this.Text = "Display Profile Manager v1.5.7";
-            if (notifyIcon != null) notifyIcon.Text = "Display Profile Manager v1.5.7";
+            this.Text = "Display Profile Manager v1.5.8";
+            if (notifyIcon != null) notifyIcon.Text = "Display Profile Manager v1.5.8";
 
             // 2. 창이 화면에 뜨자마자(Shown) 비동기 백그라운드 로딩 시작
             Shown += Window_ShownAsync;

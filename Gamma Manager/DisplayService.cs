@@ -30,12 +30,12 @@ namespace Gamma_Manager
 
             // displayName은 동일 모델 구분을 위해 (#1)/(#2)가 붙을 수 있으므로
             // 절대로 영속 저장 식별자의 1차 fallback으로 사용하지 않는다.
-            if (!string.IsNullOrEmpty(display.hardwareId))
+            if (!string.IsNullOrEmpty(display.hardwareId) || !string.IsNullOrEmpty(display.pnpDeviceId))
             {
-                MonitorIdentity.IdentityInfo identity = MonitorIdentity.Read(display.hardwareId);
+                MonitorIdentity.IdentityInfo identity = MonitorIdentity.Read(display.hardwareId, display.pnpDeviceId);
                 string rebuilt = MonitorIdentity.BuildBaseKey(identity, display.displayLink);
                 if (!string.IsNullOrEmpty(rebuilt)) return rebuilt;
-                return "PNP|" + display.hardwareId;
+                return "PNP|" + (!string.IsNullOrEmpty(display.hardwareId) ? display.hardwareId : display.pnpDeviceId);
             }
 
             // 하드웨어 ID조차 없는 최후의 경우에만 displayLink를 사용한다.
@@ -221,7 +221,8 @@ namespace Gamma_Manager
             }
             else
             {
-                applied = InternalMonitor.SetBrightness(display.hardwareId, (byte)safeBrightness);
+                string wmiId = !string.IsNullOrEmpty(display.pnpDeviceId) ? display.pnpDeviceId : display.hardwareId;
+                applied = InternalMonitor.SetBrightness(wmiId, (byte)safeBrightness);
             }
 
             if (applied)
@@ -271,7 +272,8 @@ namespace Gamma_Manager
                     }
                     else
                     {
-                        ok = InternalMonitor.SetBrightness(display.hardwareId, (byte)safeBrightness);
+                        string wmiId = !string.IsNullOrEmpty(display.pnpDeviceId) ? display.pnpDeviceId : display.hardwareId;
+                        ok = InternalMonitor.SetBrightness(wmiId, (byte)safeBrightness);
                     }
 
                     if (ok) display.monitorBrightness = safeBrightness;

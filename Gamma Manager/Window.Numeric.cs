@@ -556,9 +556,10 @@ namespace Gamma_Manager
             }
             else
             {
+                if (textBoxContrast.Value > 3.00m) textBoxContrast.Value = 3.00m;
+                if (trackBarContrast.Value > 300) trackBarContrast.Value = 300;
                 trackBarContrast.Maximum = 300;
                 textBoxContrast.Maximum = 3.00m;
-                if (textBoxContrast.Value > textBoxContrast.Maximum) textBoxContrast.Value = textBoxContrast.Maximum;
             }
         }
     }

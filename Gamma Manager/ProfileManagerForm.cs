@@ -111,6 +111,21 @@ namespace Gamma_Manager
             ThemeManager.Apply(this);
         }
 
+        private static bool IsReservedSectionName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return true;
+            string trimmed = name.Trim();
+            return trimmed.Equals("Hotkeys", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.Equals("Settings", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.Equals("Screenshot", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.Equals("기본값", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.Equals("Default", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("기본값 - ", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("Default - ", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("__", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("AutoGame_", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void LoadProfiles()
         {
             listProfiles.Items.Clear();
@@ -119,6 +134,9 @@ namespace Gamma_Manager
 
             foreach (string section in sections)
             {
+                if (IsReservedSectionName(section))
+                    continue;
+
                 string monitor = iniFile.Read("monitor", section);
                 if (!string.IsNullOrEmpty(monitor))
                     listProfiles.Items.Add(section);
@@ -260,15 +278,34 @@ namespace Gamma_Manager
             }
 
             string oldName = listProfiles.SelectedItem.ToString();
-            string newName = ShowInputDialog(LanguageManager.Korean ? "새로운 프로필 이름을 입력하세요:" : "Enter a new profile name:",
-                LanguageManager.Korean ? "프로필 이름 수정" : "Rename Profile", oldName);
+            string monitorName = iniFile.Read("monitor", oldName);
+            string monitorPrefix = !string.IsNullOrWhiteSpace(monitorName) ? (monitorName + ": ") : string.Empty;
+            string defaultEditName = (!string.IsNullOrEmpty(monitorPrefix) && oldName.StartsWith(monitorPrefix, StringComparison.OrdinalIgnoreCase))
+                ? oldName.Substring(monitorPrefix.Length).Trim()
+                : oldName;
 
-            if (string.IsNullOrWhiteSpace(newName) || newName.Equals(oldName, StringComparison.OrdinalIgnoreCase)) return;
+            string rawInput = ShowInputDialog(LanguageManager.Korean ? "새로운 프로필 이름을 입력하세요:" : "Enter a new profile name:",
+                LanguageManager.Korean ? "프로필 이름 수정" : "Rename Profile", defaultEditName);
 
-            if (newName.Equals("Hotkeys", StringComparison.OrdinalIgnoreCase) || newName.Equals("Settings", StringComparison.OrdinalIgnoreCase) ||
-                newName.StartsWith("__HARD_RESET_", StringComparison.OrdinalIgnoreCase) ||
-                newName.StartsWith("__CYCLE_", StringComparison.OrdinalIgnoreCase) ||
-                newName.StartsWith("AutoGame_", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(rawInput)) return;
+
+            string shortName = rawInput.Trim();
+            if (!string.IsNullOrEmpty(monitorPrefix) && shortName.StartsWith(monitorPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                shortName = shortName.Substring(monitorPrefix.Length).Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(shortName) || IsReservedSectionName(shortName))
+            {
+                MessageBox.Show(LanguageManager.Korean ? "사용할 수 없는 예약된 이름입니다." : "This name is reserved and cannot be used.",
+                    LanguageManager.Korean ? "오류" : "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string newName = !string.IsNullOrEmpty(monitorPrefix) ? (monitorPrefix + shortName) : shortName;
+            if (newName.Equals(oldName, StringComparison.OrdinalIgnoreCase)) return;
+
+            if (IsReservedSectionName(newName))
             {
                 MessageBox.Show(LanguageManager.Korean ? "사용할 수 없는 예약된 이름입니다." : "This name is reserved and cannot be used.",
                     LanguageManager.Korean ? "오류" : "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -283,6 +320,7 @@ namespace Gamma_Manager
                 return;
             }
 
+            string monitorKey = iniFile.Read("monitorKey", oldName);
             iniFile.RenameSection(oldName, newName);
 
             // 핫키 키 연동
@@ -291,6 +329,28 @@ namespace Gamma_Manager
             {
                 iniFile.Write(newName, hotkey, "Hotkeys");
                 iniFile.DeleteKey(oldName, "Hotkeys");
+            }
+
+            // 마지막 선택 프로필(LastProfile_*) 연동 갱신
+            if (!string.IsNullOrEmpty(monitorName))
+            {
+                string lastProfKey = "LastProfile_" + monitorName;
+                string savedLast = iniFile.Read(lastProfKey, "Settings");
+                if (string.Equals(savedLast, oldName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(savedLast, defaultEditName, StringComparison.OrdinalIgnoreCase))
+                {
+                    iniFile.Write(lastProfKey, newName, "Settings");
+                }
+            }
+            if (!string.IsNullOrEmpty(monitorKey))
+            {
+                string lastProfKeyById = "LastProfile_" + monitorKey;
+                string savedLastById = iniFile.Read(lastProfKeyById, "Settings");
+                if (string.Equals(savedLastById, oldName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(savedLastById, defaultEditName, StringComparison.OrdinalIgnoreCase))
+                {
+                    iniFile.Write(lastProfKeyById, newName, "Settings");
+                }
             }
 
             // 게임 자동 매핑(AutoGame_*) 섹션 연동 갱신
@@ -333,7 +393,7 @@ namespace Gamma_Manager
             }
 
             string p = listProfiles.SelectedItem.ToString();
-            string raw = string.Join("|", "TGM-Profile", "v1.5.7", EscapeField(p),
+            string raw = string.Join("|", "TGM-Profile", "v1.5.8", EscapeField(p),
                 EscapeField(iniFile.Read("monitor", p)),
                 EscapeField(iniFile.Read("hardwareId", p)),
                 EscapeField(iniFile.Read("monitorKey", p)),
@@ -394,6 +454,7 @@ namespace Gamma_Manager
                 if (parts.Length < 16 || parts[0] != "TGM-Profile")
                     throw new FormatException("Invalid header format");
 
+                // v1.5.8   : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
                 // v1.5.7   : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
                 // v1.5.6   : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
                 // v1.5.5   : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
@@ -401,19 +462,20 @@ namespace Gamma_Manager
                 // v1.5.3-2 : monitor | hardwareId | monitorKey | gamma/contrast/bright... (offset=2)
                 // v1.5.3   : monitor | hardwareId | gamma/contrast/bright...              (offset=1)
                 // legacy   : gamma/contrast/bright...                                      (offset=0)
-                bool isV157 = string.Equals(parts[1], "v1.5.7", StringComparison.OrdinalIgnoreCase);
-                bool isV156 = !isV157 && string.Equals(parts[1], "v1.5.6", StringComparison.OrdinalIgnoreCase);
-                bool isV155 = !isV157 && !isV156 && string.Equals(parts[1], "v1.5.5", StringComparison.OrdinalIgnoreCase);
-                bool isV154 = !isV157 && !isV156 && !isV155 && string.Equals(parts[1], "v1.5.4", StringComparison.OrdinalIgnoreCase);
-                bool isV1532 = !isV157 && !isV156 && !isV155 && !isV154 && string.Equals(parts[1], "v1.5.3-2", StringComparison.OrdinalIgnoreCase);
-                bool isV153 = !isV157 && !isV156 && !isV155 && !isV154 && !isV1532 && string.Equals(parts[1], "v1.5.3", StringComparison.OrdinalIgnoreCase);
+                bool isV158 = string.Equals(parts[1], "v1.5.8", StringComparison.OrdinalIgnoreCase);
+                bool isV157 = !isV158 && string.Equals(parts[1], "v1.5.7", StringComparison.OrdinalIgnoreCase);
+                bool isV156 = !isV158 && !isV157 && string.Equals(parts[1], "v1.5.6", StringComparison.OrdinalIgnoreCase);
+                bool isV155 = !isV158 && !isV157 && !isV156 && string.Equals(parts[1], "v1.5.5", StringComparison.OrdinalIgnoreCase);
+                bool isV154 = !isV158 && !isV157 && !isV156 && !isV155 && string.Equals(parts[1], "v1.5.4", StringComparison.OrdinalIgnoreCase);
+                bool isV1532 = !isV158 && !isV157 && !isV156 && !isV155 && !isV154 && string.Equals(parts[1], "v1.5.3-2", StringComparison.OrdinalIgnoreCase);
+                bool isV153 = !isV158 && !isV157 && !isV156 && !isV155 && !isV154 && !isV1532 && string.Equals(parts[1], "v1.5.3", StringComparison.OrdinalIgnoreCase);
 
-                if ((isV157 || isV156 || isV155 || isV154 || isV1532) && parts.Length < 18)
+                if ((isV158 || isV157 || isV156 || isV155 || isV154 || isV1532) && parts.Length < 18)
                     throw new FormatException("Incomplete profile format");
                 if (isV153 && parts.Length < 17)
                     throw new FormatException("Incomplete v1.5.3 profile format");
 
-                int offset = (isV157 || isV156 || isV155 || isV154 || isV1532) ? 2 : (isV153 ? 1 : 0);
+                int offset = (isV158 || isV157 || isV156 || isV155 || isV154 || isV1532) ? 2 : (isV153 ? 1 : 0);
                 string originalName = UnescapeField(parts[2]).Trim();
                 int colonIdx = originalName.IndexOf(':');
                 if (colonIdx >= 0)
@@ -431,17 +493,29 @@ namespace Gamma_Manager
                 if (!ShowImportDialog(defaultImportName, out pName, out targetDisplay))
                     return;
 
-                string fullProfileName = pName;
-                if (targetDisplay != null)
+                string userChosenName = pName.Trim();
+                int lastColonIdx = userChosenName.LastIndexOf(':');
+                if (lastColonIdx >= 0)
                 {
-                    string prefix = targetDisplay.displayName + ": ";
-                    string userChosenName = pName.Trim();
-                    int lastColonIdx = userChosenName.LastIndexOf(':');
-                    if (lastColonIdx >= 0)
-                    {
-                        userChosenName = userChosenName.Substring(lastColonIdx + 1).Trim();
-                    }
-                    fullProfileName = prefix + userChosenName;
+                    userChosenName = userChosenName.Substring(lastColonIdx + 1).Trim();
+                }
+
+                if (string.IsNullOrWhiteSpace(userChosenName) || IsReservedSectionName(userChosenName))
+                {
+                    MessageBox.Show(LanguageManager.Korean ? "사용할 수 없는 예약된 이름입니다." : "This name is reserved and cannot be used.",
+                        LanguageManager.Korean ? "오류" : "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                string fullProfileName = targetDisplay != null
+                    ? (targetDisplay.displayName + ": " + userChosenName)
+                    : userChosenName;
+
+                if (IsReservedSectionName(fullProfileName))
+                {
+                    MessageBox.Show(LanguageManager.Korean ? "사용할 수 없는 예약된 이름입니다." : "This name is reserved and cannot be used.",
+                        LanguageManager.Korean ? "오류" : "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
                 }
 
                 string[] sections = iniFile.GetSections();
@@ -467,13 +541,13 @@ namespace Gamma_Manager
                 {
                     // 모니터 목록을 전달받지 못한 경우 공유 코드 원본 모니터 정보로 저장 (Fallback)
                     iniFile.Write("monitor", UnescapeField(parts[3]), fullProfileName);
-                    if (isV157 || isV156 || isV155 || isV154 || isV1532 || isV153)
+                    if (offset >= 1)
                     {
                         string hwId = UnescapeField(parts[4]);
                         if (!string.IsNullOrEmpty(hwId))
                             iniFile.Write("hardwareId", hwId, fullProfileName);
                     }
-                    if (isV157 || isV156 || isV155 || isV154 || isV1532)
+                    if (offset >= 2)
                     {
                         string mk = UnescapeField(parts[5]);
                         if (!string.IsNullOrEmpty(mk))

@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -57,6 +58,7 @@ namespace Gamma_Manager
         private Button btnClose;
 
         private bool isDownloadingFfmpeg = false;
+        private CancellationTokenSource ffmpegDownloadCts;
         private ProfileData currentProfileData;
 
         public VideoFilterExportForm(IniFile ini, List<Display.DisplayInfo> allDisplays, Display.DisplayInfo activeDisplay, string activeProfile)
@@ -104,8 +106,21 @@ namespace Gamma_Manager
                     e.Cancel = true;
                     return;
                 }
+
+                try { ffmpegDownloadCts?.Cancel(); } catch { }
             }
             base.OnFormClosing(e);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                try { ffmpegDownloadCts?.Cancel(); } catch { }
+                try { ffmpegDownloadCts?.Dispose(); } catch { }
+                ffmpegDownloadCts = null;
+            }
+            base.Dispose(disposing);
         }
 
         private async void CheckFfmpegOnOpen()
@@ -494,6 +509,7 @@ namespace Gamma_Manager
 
                     if (string.Equals(section, "Settings", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(section, "Hotkeys", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(section, "Screenshot", StringComparison.OrdinalIgnoreCase) ||
                         section.StartsWith("AutoGame_", StringComparison.OrdinalIgnoreCase) ||
                         section.StartsWith("__", StringComparison.OrdinalIgnoreCase))
                         continue;
@@ -600,7 +616,15 @@ namespace Gamma_Manager
             int sat = currentProfileData.Saturation;
             int sb = currentProfileData.ShadowBoost;
             int sbm = currentProfileData.ShadowBoostMode;
-            string sbmText = sbm == 1 ? (ko ? "야간전" : "Night") : (sbm == 2 ? (ko ? "정밀분리" : "Precision") : (ko ? "감마커브" : "Curve"));
+            string sbmText;
+            switch (sbm)
+            {
+                case 1: sbmText = ko ? "야간전" : "Night"; break;
+                case 2: sbmText = ko ? "정밀분리" : "Precision"; break;
+                case 3: sbmText = ko ? "트루블랙" : "TrueBlack"; break;
+                case 4: sbmText = ko ? "커스텀" : "Custom"; break;
+                default: sbmText = ko ? "표준밸런스" : "Balanced"; break;
+            }
 
             string friendlyName = GetFriendlyProfileName(currentProfileData.Name);
 
@@ -661,10 +685,15 @@ namespace Gamma_Manager
             {
                 if (preset.Equals("기본값", StringComparison.OrdinalIgnoreCase) || preset.Equals("Default", StringComparison.OrdinalIgnoreCase))
                 {
-                    string defSection = (ko ? "기본값 - " : "Default - ") + currentSelectedDisplay.displayName;
-                    if (!string.IsNullOrEmpty(iniFile.Read("monitor", defSection)) || !string.IsNullOrEmpty(iniFile.Read("monitorKey", defSection)))
+                    string defKo = "기본값 - " + currentSelectedDisplay.displayName;
+                    string defEn = "Default - " + currentSelectedDisplay.displayName;
+                    if (!string.IsNullOrEmpty(iniFile.Read("monitor", defKo)) || !string.IsNullOrEmpty(iniFile.Read("monitorKey", defKo)))
                     {
-                        actualSection = defSection;
+                        actualSection = defKo;
+                    }
+                    else if (!string.IsNullOrEmpty(iniFile.Read("monitor", defEn)) || !string.IsNullOrEmpty(iniFile.Read("monitorKey", defEn)))
+                    {
+                        actualSection = defEn;
                     }
                 }
                 else
@@ -701,8 +730,11 @@ namespace Gamma_Manager
             if (int.TryParse(iniFile.Read("shadowBoostTint", actualSection), out int sbt))
                 data.ShadowBoostTint = Math.Max(0, Math.Min(2, sbt));
 
-            if (int.TryParse(iniFile.Read("highlightGuard", actualSection), out int hg))
+            string hgStr = iniFile.Read("highlightGuard", actualSection);
+            if (int.TryParse(hgStr, out int hg))
                 data.HighlightGuard = Math.Max(0, Math.Min(100, hg));
+            else if (string.Equals(hgStr, "True", StringComparison.OrdinalIgnoreCase) || hgStr == "1")
+                data.HighlightGuard = 50;
 
             if (int.TryParse(iniFile.Read("shadowBoostCustomPeak", actualSection), out int peak))
                 data.CustomPeak = Math.Max(10, Math.Min(40, peak));
@@ -866,6 +898,10 @@ namespace Gamma_Manager
             if (isDownloadingFfmpeg) return false;
             isDownloadingFfmpeg = true;
 
+            try { ffmpegDownloadCts?.Dispose(); } catch { }
+            ffmpegDownloadCts = new CancellationTokenSource();
+            CancellationToken ct = ffmpegDownloadCts.Token;
+
             btnDownloadFfmpeg.Enabled = false;
             btnGenerate.Enabled = false;
             progressBarFfmpeg.Visible = true;
@@ -893,6 +929,8 @@ namespace Gamma_Manager
 
                 foreach (string url in downloadUrls)
                 {
+                    if (ct.IsCancellationRequested) break;
+
                     try
                     {
                         using (var handler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate })
@@ -901,7 +939,7 @@ namespace Gamma_Manager
                             client.Timeout = TimeSpan.FromMinutes(5);
                             client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) DisplayProfileManager");
 
-                            using (var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+                            using (var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct))
                             {
                                 response.EnsureSuccessStatusCode();
 
@@ -916,9 +954,9 @@ namespace Gamma_Manager
                                     var sw = System.Diagnostics.Stopwatch.StartNew();
                                     long lastReport = 0;
 
-                                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                                     {
-                                        await fileStream.WriteAsync(buffer, 0, bytesRead);
+                                        await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
                                         totalRead += bytesRead;
 
                                         // UI 갱신을 100ms마다 한 번씩만 호출하여 메시지 큐 병목 및 UI 프리징 완벽 방지
@@ -930,17 +968,24 @@ namespace Gamma_Manager
                                             long readMb = totalRead / (1024 * 1024);
                                             long totalMb = totalBytes > 0 ? totalBytes / (1024 * 1024) : 0;
 
-                                            if (!IsDisposed)
+                                            if (!IsDisposed && IsHandleCreated)
                                             {
-                                                BeginInvoke(new Action(() =>
+                                                try
                                                 {
-                                                    progressBarFfmpeg.Value = pct;
-                                                    lblFfmpegStatus.Text = totalBytes > 0
-                                                        ? (ko ? $"FFmpeg 다운로드 중... {pct}% ({readMb}MB / {totalMb}MB)"
-                                                              : $"Downloading FFmpeg... {pct}% ({readMb}MB / {totalMb}MB)")
-                                                        : (ko ? $"FFmpeg 다운로드 중... ({readMb}MB)"
-                                                              : $"Downloading FFmpeg... ({readMb}MB)");
-                                                }));
+                                                    BeginInvoke(new Action(() =>
+                                                    {
+                                                        if (IsDisposed || progressBarFfmpeg == null || progressBarFfmpeg.IsDisposed || lblFfmpegStatus == null || lblFfmpegStatus.IsDisposed)
+                                                            return;
+
+                                                        progressBarFfmpeg.Value = pct;
+                                                        lblFfmpegStatus.Text = totalBytes > 0
+                                                            ? (ko ? $"FFmpeg 다운로드 중... {pct}% ({readMb}MB / {totalMb}MB)"
+                                                                  : $"Downloading FFmpeg... {pct}% ({readMb}MB / {totalMb}MB)")
+                                                            : (ko ? $"FFmpeg 다운로드 중... ({readMb}MB)"
+                                                                  : $"Downloading FFmpeg... ({readMb}MB)");
+                                                    }));
+                                                }
+                                                catch { }
                                             }
                                         }
                                     }
@@ -951,6 +996,14 @@ namespace Gamma_Manager
                         downloadSuccess = true;
                         break;
                     }
+                    catch (OperationCanceledException)
+                    {
+                        if (File.Exists(tempZip))
+                        {
+                            try { File.Delete(tempZip); } catch { }
+                        }
+                        throw;
+                    }
                     catch
                     {
                         if (File.Exists(tempZip))
@@ -960,15 +1013,22 @@ namespace Gamma_Manager
                     }
                 }
 
+                ct.ThrowIfCancellationRequested();
+
                 if (!downloadSuccess)
                 {
                     throw new Exception(ko ? "다운로드 서버 연결에 실패했습니다. 네트워크를 확인해 주세요." : "Failed to connect to download servers.");
                 }
 
-                lblFfmpegStatus.Text = ko ? "엔진 압축 해제 및 설치 중..." : "Extracting and installing...";
+                if (!IsDisposed && lblFfmpegStatus != null && !lblFfmpegStatus.IsDisposed)
+                {
+                    lblFfmpegStatus.Text = ko ? "엔진 압축 해제 및 설치 중..." : "Extracting and installing...";
+                }
 
                 await Task.Run(() =>
                 {
+                    ct.ThrowIfCancellationRequested();
+
                     string targetDir = Path.GetDirectoryName(targetExe);
                     if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
                     {
@@ -979,6 +1039,7 @@ namespace Gamma_Manager
                     {
                         foreach (ZipArchiveEntry entry in archive.Entries)
                         {
+                            ct.ThrowIfCancellationRequested();
                             if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
                             {
                                 entry.ExtractToFile(targetExe, true);
@@ -986,7 +1047,7 @@ namespace Gamma_Manager
                             }
                         }
                     }
-                });
+                }, ct);
 
                 if (!IsDisposed)
                 {
@@ -1000,6 +1061,10 @@ namespace Gamma_Manager
                 }
 
                 return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
             }
             catch (Exception ex)
             {
@@ -1025,7 +1090,8 @@ namespace Gamma_Manager
                 isDownloadingFfmpeg = false;
                 if (!IsDisposed)
                 {
-                    btnGenerate.Enabled = true;
+                    if (btnGenerate != null && !btnGenerate.IsDisposed)
+                        btnGenerate.Enabled = true;
                     RefreshFfmpegStatus();
                 }
             }
@@ -1091,8 +1157,8 @@ namespace Gamma_Manager
             float satFactor = currentProfileData.Saturation / 100.0f;
             int sb = currentProfileData.ShadowBoost;
             int sbm = currentProfileData.ShadowBoostMode;
-            string suffix = textSuffix.Text.Trim();
-            if (string.IsNullOrEmpty(suffix)) suffix = "_밝게";
+            string suffix = MakeSafeFileName(textSuffix.Text.Trim());
+            if (string.IsNullOrEmpty(suffix) || suffix == "Default") suffix = ko ? "_밝게" : "_bright";
 
             try
             {
@@ -1143,32 +1209,48 @@ namespace Gamma_Manager
             }
         }
 
+        private static double SampleRampNormalized(ushort[,] ramp, int channel, double inVal)
+        {
+            if (ramp == null) return inVal;
+            double pos = Math.Max(0.0, Math.Min(255.0, inVal * 255.0));
+            int idx0 = (int)Math.Floor(pos);
+            int idx1 = Math.Min(255, idx0 + 1);
+            double frac = pos - idx0;
+            double v0 = ramp[channel, idx0] / 65535.0;
+            double v1 = ramp[channel, idx1] / 65535.0;
+            return v0 + (v1 - v0) * frac;
+        }
+
         private static void GenerateCubeLutFile(string filePath, ProfileData p)
         {
             const int size = 33;
-            float rG = p.rGamma;
-            float gG = p.gGamma;
-            float bG = p.bGamma;
-
-            float rC = p.rContrast;
-            float gC = p.gContrast;
-            float bC = p.bContrast;
-
-            float rB = p.rBright;
-            float gB = p.gBright;
-            float bB = p.bBright;
-
-            int sb = p.ShadowBoost;
-            int sbm = p.ShadowBoostMode;
-            int hg = p.HighlightGuard;
             int peak = p.CustomPeak > 0 ? p.CustomPeak : 25;
             int width = p.CustomWidth > 0 ? p.CustomWidth : 3;
+
+            ushort[,] ramp = Gamma.CreateGammaRamp(
+                p.rGamma, p.gGamma, p.bGamma,
+                p.rContrast, p.gContrast, p.bContrast,
+                p.rBright, p.gBright, p.bBright,
+                p.ShadowBoost, p.ShadowBoostMode, p.ShadowBoostTint,
+                p.HighlightGuard, peak, width);
+
+            // 33단계 채널별 1D 커브 사전 계산 (CreateGammaRamp 기반 정규화 및 IdentityGuard 반영)
+            double[] curveR = new double[size];
+            double[] curveG = new double[size];
+            double[] curveB = new double[size];
+            for (int i = 0; i < size; i++)
+            {
+                double inVal = (double)i / (size - 1);
+                curveR[i] = SampleRampNormalized(ramp, 0, inVal);
+                curveG[i] = SampleRampNormalized(ramp, 1, inVal);
+                curveB[i] = SampleRampNormalized(ramp, 2, inVal);
+            }
 
             float satFactor = p.Saturation / 100.0f;
 
             using (StreamWriter sw = new StreamWriter(filePath, false, Encoding.ASCII))
             {
-                sw.WriteLine("# Created by Display Profile Manager v1.5.7");
+                sw.WriteLine("# Created by Display Profile Manager v1.5.8");
                 sw.WriteLine($"TITLE \"DisplayProfileManager_{GetFriendlyProfileName(p.Name)}\"");
                 sw.WriteLine($"LUT_3D_SIZE {size}");
                 sw.WriteLine("DOMAIN_MIN 0.0 0.0 0.0");
@@ -1176,18 +1258,15 @@ namespace Gamma_Manager
 
                 for (int b = 0; b < size; b++)
                 {
-                    double inB = (double)b / (size - 1);
-                    double curB = Gamma.ApplyChannelCurve(inB, bG, bC, bB, sb, sbm, 1.0, hg, peak, width);
+                    double curB = curveB[b];
 
                     for (int g = 0; g < size; g++)
                     {
-                        double inG = (double)g / (size - 1);
-                        double curG = Gamma.ApplyChannelCurve(inG, gG, gC, gB, sb, sbm, 1.0, hg, peak, width);
+                        double curG = curveG[g];
 
                         for (int r = 0; r < size; r++)
                         {
-                            double inR = (double)r / (size - 1);
-                            double curR = Gamma.ApplyChannelCurve(inR, rG, rC, rB, sb, sbm, 1.0, hg, peak, width);
+                            double curR = curveR[r];
 
                             double outR = curR;
                             double outG = curG;
@@ -1236,7 +1315,7 @@ namespace Gamma_Manager
             sb.AppendLine($"title 동영상/이미지 프로필 필터 적용기 - {cleanTitle}");
             sb.AppendLine("");
             sb.AppendLine(":: ==============================================================================");
-            sb.AppendLine(":: [Display Profile Manager v1.5.7] 초고속 드래그 앤 드롭 동영상/이미지 프로필 필터");
+            sb.AppendLine(":: [Display Profile Manager v1.5.8] 초고속 드래그 앤 드롭 동영상/이미지 프로필 필터");
             sb.AppendLine($":: 대상 프로필: {cleanTitle}");
             sb.AppendLine($":: 적용 수치  : 감마={gStr}, 대비={cStr}, 밝기={bStr}, 채도={sStr}, 블랙EQ={shadowBoost}%");
             sb.AppendLine("::");
@@ -1386,6 +1465,7 @@ namespace Gamma_Manager
                 sb.AppendLine("if not \"!SAFE_LUT_PATH!\"==\"\" (");
                 sb.AppendLine("    set \"FF_LUT=!SAFE_LUT_PATH:\\=/!\"");
                 sb.AppendLine("    set \"FF_LUT=!FF_LUT::=\\:!\"");
+                sb.AppendLine("    set \"FF_LUT=!FF_LUT:'=\\'!\"");
                 sb.AppendLine("    set \"VF_FILTER=lut3d='!FF_LUT!'\"");
                 sb.AppendLine(") else (");
                 sb.AppendLine("    set \"VF_FILTER=eq=gamma=!GAMMA!:contrast=!CONTRAST!:brightness=!BRIGHTNESS!:saturation=!SATURATION!\"");
@@ -1405,6 +1485,9 @@ namespace Gamma_Manager
             sb.AppendLine("set \"PROCESSED_COUNT=0\"");
             sb.AppendLine("set \"FAIL_COUNT=0\"");
             sb.AppendLine("");
+            sb.AppendLine(":: 파일명에 느낌표(!)가 포함된 미디어 파일도 깨지지 않도록 루프 진입 전 지연 확장 해제");
+            sb.AppendLine("setlocal disabledelayedexpansion");
+            sb.AppendLine("");
             sb.AppendLine(":process_loop");
             sb.AppendLine("if \"%~1\"==\"\" goto :all_done");
             sb.AppendLine("");
@@ -1415,99 +1498,94 @@ namespace Gamma_Manager
             sb.AppendLine(")");
             sb.AppendLine("");
             sb.AppendLine("set \"IN_FILE=%~1\"");
-            sb.AppendLine("set \"OUT_BASE=%~dp1%~n1!SUFFIX!\"");
+            sb.AppendLine("set \"OUT_BASE=%~dp1%~n1%SUFFIX%\"");
             sb.AppendLine("set \"OUT_EXT=%~x1\"");
-            sb.AppendLine("set \"OUT_FILE=!OUT_BASE!!OUT_EXT!\"");
+            sb.AppendLine("set \"OUT_FILE=%OUT_BASE%%OUT_EXT%\"");
             sb.AppendLine("");
-            sb.AppendLine("if /i \"!IN_FILE!\"==\"!OUT_FILE!\" (");
+            sb.AppendLine("if /i \"%IN_FILE%\"==\"%OUT_FILE%\" (");
             sb.AppendLine("    set \"OUT_BASE=%~dp1%~n1_filtered\"");
-            sb.AppendLine("    set \"OUT_FILE=!OUT_BASE!!OUT_EXT!\"");
+            sb.AppendLine("    set \"OUT_FILE=%~dp1%~n1_filtered%~x1\"");
             sb.AppendLine(")");
             sb.AppendLine("");
             sb.AppendLine(":: 중복 파일 방지 (2), (3)... 자동 순번 부여");
-            sb.AppendLine("if exist \"!OUT_FILE!\" (");
-            sb.AppendLine("    set \"DUP_IDX=2\"");
-            sb.AppendLine("    set \"FOUND_DUP=\"");
-            sb.AppendLine("    for /l %%N in (2,1,999) do (");
-            sb.AppendLine("        if not defined FOUND_DUP (");
-            sb.AppendLine("            if not exist \"!OUT_BASE! (%%N)!OUT_EXT!\" (");
-            sb.AppendLine("                set \"DUP_IDX=%%N\"");
-            sb.AppendLine("                set \"FOUND_DUP=1\"");
-            sb.AppendLine("            )");
-            sb.AppendLine("        )");
-            sb.AppendLine("    )");
-            sb.AppendLine("    set \"OUT_FILE=!OUT_BASE! (!DUP_IDX!)!OUT_EXT!\"");
-            sb.AppendLine(")");
-            sb.AppendLine("for %%F in (\"!OUT_FILE!\") do set \"OUT_NAME=%%~nxF\"");
+            sb.AppendLine("if not exist \"%OUT_FILE%\" goto :dup_done");
+            sb.AppendLine("set \"DUP_IDX=2\"");
+            sb.AppendLine(":find_dup_loop");
+            sb.AppendLine("set \"OUT_FILE=%OUT_BASE% (%DUP_IDX%)%OUT_EXT%\"");
+            sb.AppendLine("if not exist \"%OUT_FILE%\" goto :dup_done");
+            sb.AppendLine("set /a \"DUP_IDX+=1\"");
+            sb.AppendLine("if %DUP_IDX% leq 999 goto :find_dup_loop");
+            sb.AppendLine(":dup_done");
+            sb.AppendLine("for %%F in (\"%OUT_FILE%\") do set \"OUT_NAME=%%~nxF\"");
             sb.AppendLine("");
             sb.AppendLine(":: 파일 확장자 판별 (GIF 움짤 vs WebP vs 일반 이미지 vs 동영상)");
             sb.AppendLine("set \"EXT=%~x1\"");
-            sb.AppendLine("if /i \"!EXT!\"==\".gif\" goto :process_gif");
-            sb.AppendLine("if /i \"!EXT!\"==\".webp\" goto :process_webp");
+            sb.AppendLine("if /i \"%EXT%\"==\".gif\" goto :process_gif");
+            sb.AppendLine("if /i \"%EXT%\"==\".webp\" goto :process_webp");
             sb.AppendLine("for %%E in (.jpg .jpeg .png .bmp .tiff .tif) do (");
-            sb.AppendLine("    if /i \"!EXT!\"==\"%%E\" goto :process_image");
+            sb.AppendLine("    if /i \"%EXT%\"==\"%%E\" goto :process_image");
             sb.AppendLine(")");
             sb.AppendLine("goto :process_video");
             sb.AppendLine("");
             sb.AppendLine(":process_gif");
             sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("echo [GIF(움짤) 필터 적용 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("echo [GIF(움짤) 필터 적용 중] \"%~nx1\" --^> \"%OUT_NAME%\"");
             sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"!IN_FILE!\" -vf \"!VF_FILTER!,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse\" -loop 0 \"!OUT_FILE!\"");
+            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"%IN_FILE%\" -vf \"%VF_FILTER%,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse\" -loop 0 \"%OUT_FILE%\"");
             sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("        echo.");
             sb.AppendLine("        echo [오류] \"%~nx1\" GIF 변환 실패!");
             sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
             sb.AppendLine(") else (");
             sb.AppendLine("        echo.");
-            sb.AppendLine("        echo [성공] GIF 필터 적용 완료: \"!OUT_NAME!\"");
+            sb.AppendLine("        echo [성공] GIF 필터 적용 완료: \"%OUT_NAME%\"");
             sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
             sb.AppendLine(")");
             sb.AppendLine("goto :finish_current_item");
             sb.AppendLine("");
             sb.AppendLine(":process_webp");
             sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("echo [WebP(이미지/움짤) 필터 적용 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("echo [WebP(이미지/움짤) 필터 적용 중] \"%~nx1\" --^> \"%OUT_NAME%\"");
             sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v libwebp -quality 95 -loop 0 \"!OUT_FILE!\"");
+            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"%IN_FILE%\" -vf \"%VF_FILTER%\" -c:v libwebp -quality 95 -loop 0 \"%OUT_FILE%\"");
             sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("        echo.");
             sb.AppendLine("        echo [오류] \"%~nx1\" WebP 변환 실패!");
             sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
             sb.AppendLine(") else (");
             sb.AppendLine("        echo.");
-            sb.AppendLine("        echo [성공] WebP 필터 적용 완료: \"!OUT_NAME!\"");
+            sb.AppendLine("        echo [성공] WebP 필터 적용 완료: \"%OUT_NAME%\"");
             sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
             sb.AppendLine(")");
             sb.AppendLine("goto :finish_current_item");
             sb.AppendLine("");
             sb.AppendLine(":process_image");
             sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("echo [이미지 필터 적용 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("echo [이미지 필터 적용 중] \"%~nx1\" --^> \"%OUT_NAME%\"");
             sb.AppendLine("echo ------------------------------------------------------------------------------");
             sb.AppendLine("set \"IMG_OPTS=\"");
-            sb.AppendLine("if /i \"!EXT!\"==\".jpg\" set \"IMG_OPTS=-q:v 2\"");
-            sb.AppendLine("if /i \"!EXT!\"==\".jpeg\" set \"IMG_OPTS=-q:v 2\"");
-            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -frames:v 1 -update 1 !IMG_OPTS! \"!OUT_FILE!\"");
+            sb.AppendLine("if /i \"%EXT%\"==\".jpg\" set \"IMG_OPTS=-q:v 2\"");
+            sb.AppendLine("if /i \"%EXT%\"==\".jpeg\" set \"IMG_OPTS=-q:v 2\"");
+            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -i \"%IN_FILE%\" -vf \"%VF_FILTER%\" -frames:v 1 -update 1 %IMG_OPTS% \"%OUT_FILE%\"");
             sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("        echo.");
             sb.AppendLine("        echo [오류] \"%~nx1\" 이미지 변환 실패!");
             sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
             sb.AppendLine(") else (");
             sb.AppendLine("        echo.");
-            sb.AppendLine("        echo [성공] 이미지 필터 적용 완료: \"!OUT_NAME!\"");
+            sb.AppendLine("        echo [성공] 이미지 필터 적용 완료: \"%OUT_NAME%\"");
             sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
             sb.AppendLine(")");
             sb.AppendLine("goto :finish_current_item");
             sb.AppendLine("");
             sb.AppendLine(":process_video");
             sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("echo [동영상 변환 진행 중] \"%~nx1\" --^> \"!OUT_NAME!\"");
+            sb.AppendLine("echo [동영상 변환 진행 중] \"%~nx1\" --^> \"%OUT_NAME%\"");
             sb.AppendLine("echo ------------------------------------------------------------------------------");
-            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a copy \"!OUT_FILE!\"");
+            sb.AppendLine("\"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"%IN_FILE%\" -vf \"%VF_FILTER%\" -c:v %VCODEC% %EXTRA_OPTS% -pix_fmt yuv420p -c:a copy \"%OUT_FILE%\"");
             sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("        echo [안내] 오디오 스트림 호환 AAC 모드로 재시도합니다...");
-            sb.AppendLine("        \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"!IN_FILE!\" -vf \"!VF_FILTER!\" -c:v !VCODEC! !EXTRA_OPTS! -pix_fmt yuv420p -c:a aac -b:a 192k \"!OUT_FILE!\"");
+            sb.AppendLine("        \"%FFMPEG_CMD%\" -y -hide_banner -loglevel warning -stats -i \"%IN_FILE%\" -vf \"%VF_FILTER%\" -c:v %VCODEC% %EXTRA_OPTS% -pix_fmt yuv420p -c:a aac -b:a 192k \"%OUT_FILE%\"");
             sb.AppendLine(")");
             sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("        echo.");
@@ -1515,7 +1593,7 @@ namespace Gamma_Manager
             sb.AppendLine("        set /a \"FAIL_COUNT+=1\"");
             sb.AppendLine(") else (");
             sb.AppendLine("        echo.");
-            sb.AppendLine("        echo [성공] 동영상 필터 적용 완료: \"!OUT_NAME!\"");
+            sb.AppendLine("        echo [성공] 동영상 필터 적용 완료: \"%OUT_NAME%\"");
             sb.AppendLine("        set /a \"PROCESSED_COUNT+=1\"");
             sb.AppendLine(")");
             sb.AppendLine("goto :finish_current_item");
@@ -1528,8 +1606,8 @@ namespace Gamma_Manager
             sb.AppendLine("echo.");
             sb.AppendLine("echo ==============================================================================");
             sb.AppendLine("echo  모든 미디어(동영상/이미지) 변환 작업이 완료되었습니다!");
-            sb.AppendLine("echo  - 성공: !PROCESSED_COUNT!건");
-            sb.AppendLine("echo  - 실패: !FAIL_COUNT!건");
+            sb.AppendLine("echo  - 성공: %PROCESSED_COUNT%건");
+            sb.AppendLine("echo  - 실패: %FAIL_COUNT%건");
             sb.AppendLine("echo ==============================================================================");
             sb.AppendLine("echo.");
             sb.AppendLine("echo 아무 키나 누르면 창이 닫힙니다...");

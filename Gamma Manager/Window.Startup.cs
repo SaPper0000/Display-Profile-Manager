@@ -122,7 +122,15 @@ namespace Gamma_Manager
 
         private void initTrayMenu()
         {
-            contextMenu.Items.Clear();
+            if (contextMenu != null)
+            {
+                while (contextMenu.Items.Count > 0)
+                {
+                    ToolStripItem oldItem = contextMenu.Items[0];
+                    contextMenu.Items.RemoveAt(0);
+                    try { oldItem?.Dispose(); } catch { }
+                }
+            }
             toolMonitors.Clear();
 
             ToolStripMenuItem toolSetting = new ToolStripMenuItem(LanguageManager.Korean ? "설정" : "Settings", null, toolSettings_Click);
@@ -251,6 +259,15 @@ namespace Gamma_Manager
         private void UpdateMonitorUI(Display.DisplayInfo display)
         {
             if (display == null) return;
+
+            // 대비 수치가 3.00을 초과하는 프로필인 경우 확장 대비(최대 10.00) 모드를 자동으로 활성화하여 값 잘림 방지
+            bool requiresExContrast = display.rContrast > 3.0f || display.gContrast > 3.0f || display.bContrast > 3.0f;
+            if (requiresExContrast && checkBoxExContrast != null && !checkBoxExContrast.Checked)
+            {
+                checkBoxExContrast.Checked = true;
+                trackBarContrast.Maximum = 1000;
+                textBoxContrast.Maximum = 10.00m;
+            }
 
             // GPU 감마/대비/밝기/채도 슬라이더 및 텍스트 갱신
             if (allColors)
@@ -429,22 +446,44 @@ namespace Gamma_Manager
             }
             else
             {
-                int liveBrightness;
-                if (InternalMonitor.TryGetBrightness(out liveBrightness))
+                _hardwareReadCts = new System.Threading.CancellationTokenSource();
+                var token = _hardwareReadCts.Token;
+
+                System.Threading.Tasks.Task.Run(() =>
                 {
-                    targetDisplay.monitorBrightness = liveBrightness;
-                    int safeBrightness = Clamp(targetDisplay.monitorBrightness, trackBarMonitorBrightness.Minimum, trackBarMonitorBrightness.Maximum);
-                    disableChangeFunc = true;
-                    try
+                    if (token.IsCancellationRequested) return;
+
+                    string wmiId = !string.IsNullOrEmpty(targetDisplay.pnpDeviceId) ? targetDisplay.pnpDeviceId : targetDisplay.hardwareId;
+                    int liveBrightness;
+                    if (InternalMonitor.TryGetBrightness(wmiId, out liveBrightness))
                     {
-                        textBoxMonitorBrightness.Value = safeBrightness;
-                        trackBarMonitorBrightness.Value = safeBrightness;
+                        if (token.IsCancellationRequested) return;
+                        targetDisplay.monitorBrightness = liveBrightness;
+
+                        if (this.IsHandleCreated && !this.IsDisposed && !token.IsCancellationRequested)
+                        {
+                            this.BeginInvoke((MethodInvoker)delegate
+                            {
+                                if (token.IsCancellationRequested || currDisplay != targetDisplay) return;
+
+                                if (!trackBarMonitorBrightness.Capture)
+                                {
+                                    disableChangeFunc = true;
+                                    try
+                                    {
+                                        int safeBrightness = Clamp(targetDisplay.monitorBrightness, trackBarMonitorBrightness.Minimum, trackBarMonitorBrightness.Maximum);
+                                        textBoxMonitorBrightness.Value = safeBrightness;
+                                        trackBarMonitorBrightness.Value = safeBrightness;
+                                    }
+                                    finally
+                                    {
+                                        disableChangeFunc = false;
+                                    }
+                                }
+                            });
+                        }
                     }
-                    finally
-                    {
-                        disableChangeFunc = false;
-                    }
-                }
+                }, token);
             }
         }
 
@@ -495,6 +534,8 @@ namespace Gamma_Manager
                 if (string.IsNullOrEmpty(defPreset) || string.IsNullOrEmpty(iniFile.Read("monitor", defPreset)))
                     continue;
 
+                string monitorKey = DisplayService.GetMonitorKey(display);
+
                 // INI에 저장되어 있던 기존 기본값 읽기
                 int iniB = int.TryParse(iniFile.Read("monitorBrightness", defPreset), out int b) ? b : -1;
                 int iniC = int.TryParse(iniFile.Read("monitorContrast", defPreset), out int c) ? c : -1;
@@ -502,8 +543,8 @@ namespace Gamma_Manager
 
                 // 방금 시작 시 실측된 하드웨어 값 읽기
                 int realB = -1, realC = -1, realSat = -1;
-                bool hasRealHardware = StartupStateManager.TryGetOriginalValues(display.displayLink, out realB, out realC);
-                bool hasRealSat = StartupStateManager.TryGetOriginalSaturation(display.displayLink, out realSat);
+                bool hasRealHardware = StartupStateManager.TryGetOriginalValues(display.displayLink, out realB, out realC, monitorKey);
+                bool hasRealSat = StartupStateManager.TryGetOriginalSaturation(display.displayLink, out realSat, monitorKey);
 
                 List<string> diffs = new List<string>();
 
@@ -513,8 +554,8 @@ namespace Gamma_Manager
                     diffs.Add(ko ? $"명암 (대비): {iniC}  ➔  {realC}" : $"Contrast: {iniC}  ➔  {realC}");
                 }
 
-                // 2. 모니터 밝기
-                if (display.isExternal && hasRealHardware && iniB >= 0 && realB >= 0 && realB != iniB)
+                // 2. 모니터 밝기 (외장 DDC/CI 및 내장 WMI 공통)
+                if (hasRealHardware && iniB >= 0 && realB >= 0 && realB != iniB)
                 {
                     diffs.Add(ko ? $"화면 밝기: {iniB}  ➔  {realB}" : $"Brightness: {iniB}  ➔  {realB}");
                 }
@@ -542,7 +583,7 @@ namespace Gamma_Manager
                             display.monitorContrast = realC;
                             iniFile.Write("monitorContrast", realC.ToString(System.Globalization.CultureInfo.InvariantCulture), defPreset);
                         }
-                        if (display.isExternal && realB >= 0)
+                        if (realB >= 0)
                         {
                             display.monitorBrightness = realB;
                             iniFile.Write("monitorBrightness", realB.ToString(System.Globalization.CultureInfo.InvariantCulture), defPreset);
@@ -552,6 +593,7 @@ namespace Gamma_Manager
                             int clampedSat = Clamp(realSat, display.saturationMin, display.saturationMax);
                             display.saturation = clampedSat;
                             display.saturationDefault = clampedSat;
+                            Saturation.SetOriginalValue(display.displayLink, clampedSat);
                             iniFile.Write("saturation", clampedSat.ToString(System.Globalization.CultureInfo.InvariantCulture), defPreset);
                         }
                         iniFile.Flush();
@@ -580,7 +622,21 @@ namespace Gamma_Manager
                         if (IsOSDEnabled())
                             OSDForm.ShowMessage(display.displayLink, ko ? "🔄 기본값 복원됨" : "🔄 Default Restored");
                     }
-                    // 3. KeepCurrent: 화면 현재 상태 유지 (기본값 변경 안 함)
+                    else
+                    {
+                        // 3. KeepCurrent: 현재 실측된 화면 상태를 그대로 유지하고 기존 [기본값] INI는 변경하지 않음
+                        if (hasRealHardware && realB >= 0)
+                            display.monitorBrightness = realB;
+                        if (display.isExternal && hasRealHardware && realC >= 0)
+                            display.monitorContrast = realC;
+                        if (display.saturationSupported && hasRealSat && realSat >= 0)
+                            display.saturation = Clamp(realSat, display.saturationMin, display.saturationMax);
+
+                        if (currDisplay != null && string.Equals(display.displayLink, currDisplay.displayLink, StringComparison.OrdinalIgnoreCase))
+                        {
+                            fillInfo(currDisplay);
+                        }
+                    }
                 }
             }
         }

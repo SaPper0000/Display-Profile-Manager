@@ -24,6 +24,8 @@ namespace Gamma_Manager
             // UI 표시명에 붙는 (#1)/(#2)와 무관한 원본 모델명. 저장/매칭에는 사용하지 않는다.
             public string baseDisplayName = string.Empty;
             public string hardwareId = string.Empty;
+            // EDD_GET_DEVICE_INTERFACE_NAME으로 획득한 PnP 장치 인터페이스 경로 (EDID 및 WMI 매칭용)
+            public string pnpDeviceId = string.Empty;
             public string displayLink = string.Empty;
             // Stable physical monitor identity. Prefer EDID serial; fall back to PNP ID.
             public string monitorKey = string.Empty;
@@ -83,6 +85,14 @@ namespace Gamma_Manager
         public static extern bool DestroyPhysicalMonitors(uint dwPhysicalMonitorArraySize, [In] PHYSICAL_MONITOR[] pPhysicalMonitorArray);
         #endregion
 
+        private static string CleanNullTerminatedString(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return string.Empty;
+            int nullIdx = input.IndexOf('\0');
+            if (nullIdx >= 0) input = input.Substring(0, nullIdx);
+            return input.Trim();
+        }
+
         public static List<DisplayInfo> QueryDisplayDevices()
         {
             InternalMonitor.Cleanup();
@@ -102,59 +112,90 @@ namespace Gamma_Manager
 
                     if (WinApi.GetMonitorInfo(hMonitor, ref monitorInfo))
                     {
-                        string cleanDeviceName = monitorInfo.DeviceName ?? string.Empty;
-                        int nullIdx = cleanDeviceName.IndexOf('\0');
-                        if (nullIdx >= 0) cleanDeviceName = cleanDeviceName.Substring(0, nullIdx);
-                        cleanDeviceName = cleanDeviceName.Trim();
+                        string cleanDeviceName = CleanNullTerminatedString(monitorInfo.DeviceName);
 
                         monitor.displayLink = cleanDeviceName;
                         monitor.adapterVendor = WinApi.GetDisplayAdapterVendor(cleanDeviceName);
 
-                        WinApi.DISPLAY_DEVICE device = new WinApi.DISPLAY_DEVICE();
-                        device.Initialize();
-                        if (WinApi.EnumDisplayDevices(cleanDeviceName, 0, ref device, 0))
+                        WinApi.DISPLAY_DEVICE selectedDevice = new WinApi.DISPLAY_DEVICE();
+                        selectedDevice.Initialize();
+                        bool foundDevice = false;
+                        uint selectedDevNum = 0;
+
+                        WinApi.DISPLAY_DEVICE firstDevice = new WinApi.DISPLAY_DEVICE();
+                        firstDevice.Initialize();
+                        bool hasFirstDevice = false;
+                        uint firstDevNum = 0;
+
+                        for (uint devNum = 0; ; devNum++)
                         {
-                            for (uint devNum = 0; ; devNum++)
+                            WinApi.DISPLAY_DEVICE monitorDevice = new WinApi.DISPLAY_DEVICE();
+                            monitorDevice.Initialize();
+                            if (!WinApi.EnumDisplayDevices(cleanDeviceName, devNum, ref monitorDevice, 0))
+                                break;
+
+                            string devStr = CleanNullTerminatedString(monitorDevice.DeviceString);
+                            if (string.IsNullOrEmpty(devStr))
+                                continue;
+
+                            if (!hasFirstDevice)
                             {
-                                WinApi.DISPLAY_DEVICE monitorDevice = new WinApi.DISPLAY_DEVICE();
-                                monitorDevice.Initialize();
-                                if (!WinApi.EnumDisplayDevices(cleanDeviceName, devNum, ref monitorDevice, 0))
-                                    break;
+                                firstDevice = monitorDevice;
+                                firstDevNum = devNum;
+                                hasFirstDevice = true;
+                            }
 
-                                string devStr = monitorDevice.DeviceString ?? string.Empty;
-                                nullIdx = devStr.IndexOf('\0');
-                                if (nullIdx >= 0) devStr = devStr.Substring(0, nullIdx);
-                                devStr = devStr.Trim();
+                            if ((monitorDevice.StateFlags & WinApi.DisplayDeviceStateFlags.AttachedToDesktop) != 0)
+                            {
+                                selectedDevice = monitorDevice;
+                                selectedDevNum = devNum;
+                                foundDevice = true;
+                                break;
+                            }
+                        }
 
-                                if (!string.IsNullOrEmpty(devStr))
+                        if (!foundDevice && hasFirstDevice)
+                        {
+                            selectedDevice = firstDevice;
+                            selectedDevNum = firstDevNum;
+                            foundDevice = true;
+                        }
+
+                        if (foundDevice)
+                        {
+                            monitor.monitorFriendlyName = CleanNullTerminatedString(selectedDevice.DeviceString);
+                            string devId = CleanNullTerminatedString(selectedDevice.DeviceID);
+                            monitor.monitorManufacturerName = devId;
+                            if (!string.IsNullOrEmpty(devId))
+                            {
+                                monitor.hardwareId = devId;
+                            }
+
+                            // EDD_GET_DEVICE_INTERFACE_NAME(0x1)으로 실제 PnP 인스턴스 경로(\\?\DISPLAY#모델#인스턴스ID#{GUID}) 취득
+                            WinApi.DISPLAY_DEVICE interfaceDevice = new WinApi.DISPLAY_DEVICE();
+                            interfaceDevice.Initialize();
+                            if (WinApi.EnumDisplayDevices(cleanDeviceName, selectedDevNum, ref interfaceDevice, WinApi.EDD_GET_DEVICE_INTERFACE_NAME))
+                            {
+                                string ifaceId = CleanNullTerminatedString(interfaceDevice.DeviceID);
+                                if (!string.IsNullOrEmpty(ifaceId))
                                 {
-                                    monitor.monitorFriendlyName = devStr;
-
-                                    string devId = monitorDevice.DeviceID ?? string.Empty;
-                                    nullIdx = devId.IndexOf('\0');
-                                    if (nullIdx >= 0) devId = devId.Substring(0, nullIdx);
-                                    monitor.monitorManufacturerName = devId.Trim();
-
-                                    if (!string.IsNullOrEmpty(devId))
-                                    {
-                                        monitor.hardwareId = devId.Trim();
-                                    }
-                                    break;
+                                    monitor.pnpDeviceId = ifaceId;
                                 }
                             }
                         }
 
-                        string DName = device.DeviceID ?? string.Empty;
-                        nullIdx = DName.IndexOf('\0');
-                        if (nullIdx >= 0) DName = DName.Substring(0, nullIdx);
-                        DName = DName.Trim();
-
+                        string DName = CleanNullTerminatedString(selectedDevice.DeviceID);
                         if (!string.IsNullOrEmpty(DName))
                         {
-                            string[] parts = DName.Split('\\');
-                            if (parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1]))
+                            string[] parts = DName.Split(new[] { '\\', '#' }, StringSplitOptions.RemoveEmptyEntries);
+                            for (int i = 0; i < parts.Length; i++)
                             {
-                                DName = parts[1];
+                                if (parts[i].Equals("DISPLAY", StringComparison.OrdinalIgnoreCase) ||
+                                    parts[i].Equals("MONITOR", StringComparison.OrdinalIgnoreCase) ||
+                                    parts[i].Equals("?", StringComparison.OrdinalIgnoreCase))
+                                    continue;
+                                DName = parts[i];
+                                break;
                             }
                         }
 
@@ -169,10 +210,12 @@ namespace Gamma_Manager
 
                         if (string.IsNullOrEmpty(monitor.hardwareId))
                         {
-                            monitor.hardwareId = !string.IsNullOrEmpty(device.DeviceID) ? device.DeviceID.Trim() : monitor.displayName;
+                            monitor.hardwareId = !string.IsNullOrEmpty( monitor.pnpDeviceId )
+                                ? monitor.pnpDeviceId
+                                : monitor.displayName;
                         }
 
-                        MonitorIdentity.IdentityInfo identity = MonitorIdentity.Read(monitor.hardwareId);
+                        MonitorIdentity.IdentityInfo identity = MonitorIdentity.Read(monitor.hardwareId, monitor.pnpDeviceId);
                         monitor.edidManufacturer = identity.Manufacturer;
                         monitor.edidProductCode = identity.ProductCode;
                         monitor.edidSerial = identity.Serial;
@@ -249,8 +292,9 @@ namespace Gamma_Manager
                 else
                 {
                     // DDC/CI 지연 시 WMI 조회 시도 (노트북 내장 패널 판별)
+                    string wmiMatchId = !string.IsNullOrEmpty(monitor.pnpDeviceId) ? monitor.pnpDeviceId : monitor.hardwareId;
                     int brightness;
-                    if (InternalMonitor.TryGetBrightness(monitor.hardwareId, out brightness))
+                    if (InternalMonitor.TryGetBrightness(wmiMatchId, out brightness))
                     {
                         monitor.isExternal = false;
                         monitor.monitorBrightness = brightness;

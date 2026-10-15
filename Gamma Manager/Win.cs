@@ -71,6 +71,7 @@ namespace Gamma_Manager
         }
         #endregion
 
+        internal const int EDD_GET_DEVICE_INTERFACE_NAME = 0x00000001;
 
         public delegate bool MonitorEnumDelegate(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
 

@@ -100,7 +100,7 @@ namespace Gamma_Manager
             checkBoxExContrast.Text = "RGB Link";
             checkBoxExContrast.CheckedChanged += checkBoxExContrast_CheckedChanged;
 
-            pictureBox1.BackgroundImage = global::Gamma_Manager.Properties.Resources.DefaultCatBanner;
+            pictureBox1.BackgroundImage = SharedDefaultBanner;
             pictureBox1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
             pictureBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             pictureBox1.TabStop = false;

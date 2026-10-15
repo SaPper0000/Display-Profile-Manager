@@ -247,6 +247,7 @@ namespace Gamma_Manager
             {
                 if (form.ShowDialog(this) == DialogResult.OK)
                 {
+                    ClearManualHotkeyStateAndRestoreBase();
                     RefreshGlobalHotkeys();
                     initPresets();
                     initTrayMenu();
@@ -422,7 +423,7 @@ namespace Gamma_Manager
                 }
                 else
                 {
-                    nextImage = global::Gamma_Manager.Properties.Resources.DefaultCatBanner;
+                    nextImage = SharedDefaultBanner;
                 }
 
                 Image oldImage = pictureBox1.BackgroundImage;
@@ -433,7 +434,7 @@ namespace Gamma_Manager
                 pictureBox1.Tag = isCustomLoaded ? "Custom" : null;
 
                 // 이전에 로드된 이미지가 동적 생성된 사용자 커스텀 이미지인 경우에만 Dispose (GDI 핸들 누수 완벽 방지)
-                if (oldImage != null && string.Equals(oldTag as string, "Custom", StringComparison.Ordinal))
+                if (oldImage != null && oldImage != nextImage && string.Equals(oldTag as string, "Custom", StringComparison.Ordinal))
                 {
                     oldImage.Dispose();
                 }
@@ -445,11 +446,11 @@ namespace Gamma_Manager
                 Image oldImage = pictureBox1.BackgroundImage;
                 object oldTag = pictureBox1.Tag;
 
-                pictureBox1.BackgroundImage = global::Gamma_Manager.Properties.Resources.DefaultCatBanner;
+                pictureBox1.BackgroundImage = SharedDefaultBanner;
                 pictureBox1.BackgroundImageLayout = ImageLayout.Zoom;
                 pictureBox1.Tag = null;
 
-                if (oldImage != null && string.Equals(oldTag as string, "Custom", StringComparison.Ordinal))
+                if (oldImage != null && oldImage != SharedDefaultBanner && string.Equals(oldTag as string, "Custom", StringComparison.Ordinal))
                 {
                     oldImage.Dispose();
                 }
@@ -507,6 +508,10 @@ namespace Gamma_Manager
 
             // 모니터 메모리 객체의 기본값(Default)도 현재 세팅으로 동기화 (초기화 및 토글 복원 시 정확한 복원 보장)
             currDisplay.saturationDefault = defaultData.Saturation;
+            if (currDisplay.saturationSupported)
+            {
+                Saturation.SetOriginalValue(currDisplay.displayLink, defaultData.Saturation);
+            }
 
             // 3. 현재 모니터의 활성 프로필 상태를 '기본값'으로 인식
             string monitorKey = DisplayService.GetMonitorKey(currDisplay);

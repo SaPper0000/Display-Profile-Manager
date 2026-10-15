@@ -23,15 +23,16 @@ namespace Gamma_Manager
             public string RawHardwareId = string.Empty;
         }
 
-        public static IdentityInfo Read(string hardwareId)
+        public static IdentityInfo Read(string hardwareId, string pnpDeviceId = null)
         {
             IdentityInfo info = new IdentityInfo { RawHardwareId = hardwareId ?? string.Empty };
-            if (string.IsNullOrWhiteSpace(hardwareId)) return info;
+            string querySource = !string.IsNullOrWhiteSpace(pnpDeviceId) ? pnpDeviceId : hardwareId;
+            if (string.IsNullOrWhiteSpace(querySource)) return info;
 
             try
             {
                 // 1. 다양한 Windows 장치 ID 포맷(\ 및 # 구분자) 대응 분해
-                string[] parts = hardwareId.Split(new[] { '\\', '#' }, StringSplitOptions.RemoveEmptyEntries);
+                string[] parts = querySource.Split(new[] { '\\', '#' }, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length < 2) return info;
 
                 // 2. 모델 코드 추출 (예: GSM5B15, SAM0B23 등)
@@ -56,27 +57,47 @@ namespace Gamma_Manager
                         string[] subKeyNames = modelKey.GetSubKeyNames();
                         if (subKeyNames != null && subKeyNames.Length > 0)
                         {
-                            // 1순위: hardwareId 내에 subKeyName(인스턴스 ID)이 포함되어 있는 정확한 서브키 찾기
+                            // 1순위: pnpDeviceId 또는 hardwareId 내에 subKeyName(PnP 인스턴스 ID)이 포함되어 있는 정확한 서브키 찾기
                             string matchedSubKey = null;
                             foreach (string subKeyName in subKeyNames)
                             {
-                                if (!string.IsNullOrEmpty(subKeyName) && hardwareId.IndexOf(subKeyName, StringComparison.OrdinalIgnoreCase) >= 0)
+                                if (string.IsNullOrEmpty(subKeyName)) continue;
+                                if ((!string.IsNullOrEmpty(pnpDeviceId) && pnpDeviceId.IndexOf(subKeyName, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                                    (!string.IsNullOrEmpty(hardwareId) && hardwareId.IndexOf(subKeyName, StringComparison.OrdinalIgnoreCase) >= 0))
                                 {
                                     matchedSubKey = subKeyName;
                                     break;
                                 }
                             }
 
-                            // 매칭된 서브키가 있으면 해당 서브키 먼저 시도, 없으면 전체 서브키 순회
+                            // 2순위: hardwareId가 드라이버 키 포맷(MONITOR\모델\{4d36e96e-...}\0001)인 경우 레지스트리 Driver 값과 대조
+                            if (string.IsNullOrEmpty(matchedSubKey) && !string.IsNullOrEmpty(hardwareId))
+                            {
+                                foreach (string subKeyName in subKeyNames)
+                                {
+                                    if (string.IsNullOrEmpty(subKeyName)) continue;
+                                    using (RegistryKey instKey = modelKey.OpenSubKey(subKeyName))
+                                    {
+                                        string driverVal = instKey?.GetValue("Driver") as string;
+                                        if (!string.IsNullOrEmpty(driverVal) &&
+                                            hardwareId.IndexOf(driverVal, StringComparison.OrdinalIgnoreCase) >= 0)
+                                        {
+                                            matchedSubKey = subKeyName;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 매칭된 서브키가 있으면 해당 서브키 먼저 시도, 단일 서브키만 존재할 때만 폴백 허용
                             List<string> orderedSubKeys = new List<string>();
                             if (!string.IsNullOrEmpty(matchedSubKey))
                             {
                                 orderedSubKeys.Add(matchedSubKey);
                             }
-                            foreach (string subKeyName in subKeyNames)
+                            else if (subKeyNames.Length == 1)
                             {
-                                if (!orderedSubKeys.Contains(subKeyName))
-                                    orderedSubKeys.Add(subKeyName);
+                                orderedSubKeys.Add(subKeyNames[0]);
                             }
 
                             foreach (string subKeyName in orderedSubKeys)

@@ -10,6 +10,7 @@ namespace Gamma_Manager
     {
         private readonly IniFile iniFile;
         private readonly DisplayService displayService = new DisplayService();
+        internal static readonly Bitmap SharedDefaultBanner = global::Gamma_Manager.Properties.Resources.DefaultCatBanner;
 
         private List<Display.DisplayInfo> displays = new List<Display.DisplayInfo>();
         private Display.DisplayInfo currDisplay;
@@ -70,7 +71,7 @@ namespace Gamma_Manager
         private Button buttonOpenFolder;
         private Button buttonUpdateCheck;
 
-        private ToolStripComboBox toolMonitor = new ToolStripComboBox();
+        private ToolStripComboBox toolMonitor;
         private List<ToolStripItem> toolMonitors = new List<ToolStripItem>();
 
         private class MonitorStateSnapshot

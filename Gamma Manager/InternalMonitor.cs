@@ -18,7 +18,30 @@ namespace Gamma_Manager
         private static string NormalizeId(string id)
         {
             if (string.IsNullOrEmpty(id)) return string.Empty;
-            return id.Replace("\\", "_").Trim().ToUpperInvariant();
+            string s = id.Trim();
+            if (s.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
+                s = s.Substring(4);
+            int guidIdx = s.IndexOf("#{", StringComparison.OrdinalIgnoreCase);
+            if (guidIdx > 0)
+                s = s.Substring(0, guidIdx);
+            if (s.EndsWith("_0", StringComparison.OrdinalIgnoreCase))
+                s = s.Substring(0, s.Length - 2);
+            return s.Replace("\\", "_").Replace("#", "_").Trim().ToUpperInvariant();
+        }
+
+        private static string ExtractModelCode(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return string.Empty;
+            string[] parts = id.Split(new[] { '\\', '#' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (parts[i].Equals("DISPLAY", StringComparison.OrdinalIgnoreCase) ||
+                    parts[i].Equals("MONITOR", StringComparison.OrdinalIgnoreCase) ||
+                    parts[i].Equals("?", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                return parts[i].ToUpperInvariant();
+            }
+            return string.Empty;
         }
 
         private static bool MatchInstance(string instanceName, string targetHardwareId)
@@ -29,7 +52,13 @@ namespace Gamma_Manager
             string normInstance = NormalizeId(instanceName);
             string normTarget = NormalizeId(targetHardwareId);
 
-            return normInstance.Contains(normTarget) || normTarget.Contains(normInstance);
+            if (normInstance.Contains(normTarget) || normTarget.Contains(normInstance))
+                return true;
+
+            string instModel = ExtractModelCode(instanceName);
+            string targetModel = ExtractModelCode(targetHardwareId);
+            return !string.IsNullOrEmpty(instModel) &&
+                   string.Equals(instModel, targetModel, StringComparison.OrdinalIgnoreCase);
         }
 
         private static void EnsureWmiInstancesForMonitorLocked(string hardwareId, out ManagementObject readObj, out ManagementObject writeObj)
@@ -52,8 +81,10 @@ namespace Gamma_Manager
                     using (ManagementObjectCollection reads = readSearcher.Get())
                     {
                         ManagementObject fallbackRead = null;
+                        int count = 0;
                         foreach (ManagementObject o in reads)
                         {
+                            count++;
                             try
                             {
                                 string instName = o.GetPropertyValue("InstanceName") as string;
@@ -83,7 +114,7 @@ namespace Gamma_Manager
                             }
                         }
 
-                        if (readObj == null && string.IsNullOrEmpty(hardwareId))
+                        if (readObj == null && (string.IsNullOrEmpty(hardwareId) || count == 1))
                             readObj = fallbackRead;
                         else if (readObj != fallbackRead && fallbackRead != null)
                             fallbackRead.Dispose();
@@ -99,8 +130,10 @@ namespace Gamma_Manager
                     using (ManagementObjectCollection writes = writeSearcher.Get())
                     {
                         ManagementObject fallbackWrite = null;
+                        int count = 0;
                         foreach (ManagementObject o in writes)
                         {
+                            count++;
                             try
                             {
                                 string instName = o.GetPropertyValue("InstanceName") as string;
@@ -130,7 +163,7 @@ namespace Gamma_Manager
                             }
                         }
 
-                        if (writeObj == null && string.IsNullOrEmpty(hardwareId))
+                        if (writeObj == null && (string.IsNullOrEmpty(hardwareId) || count == 1))
                             writeObj = fallbackWrite;
                         else if (writeObj != fallbackWrite && fallbackWrite != null)
                             fallbackWrite.Dispose();

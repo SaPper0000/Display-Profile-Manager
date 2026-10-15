@@ -119,6 +119,19 @@ namespace Gamma_Manager
             iniFile?.Write("ShowOSD", value ? "1" : "0", SectionName);
         }
 
+        public static bool GetHdrBypass(IniFile iniFile)
+        {
+            if (iniFile == null) return true;
+            string val = iniFile.Read("HdrBypass", SectionName);
+            if (string.IsNullOrEmpty(val)) return true; // 기본값 ON (화이트아웃 방지 활성화)
+            return val == "1" || string.Equals(val, "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static void SetHdrBypass(IniFile iniFile, bool value)
+        {
+            iniFile?.Write("HdrBypass", value ? "1" : "0", SectionName);
+        }
+
         public static void OpenSaveFolder(IniFile iniFile)
         {
             try
@@ -164,7 +177,7 @@ namespace Gamma_Manager
                 {
                     foreach (var d in displays)
                     {
-                        if (string.Equals(d.displayLink, targetScreen.DeviceName, StringComparison.OrdinalIgnoreCase))
+                        if (d != null && string.Equals(d.displayLink, targetScreen.DeviceName, StringComparison.OrdinalIgnoreCase))
                         {
                             targetDisplay = d;
                             break;
@@ -184,7 +197,64 @@ namespace Gamma_Manager
                         g.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
                     }
 
-                    ApplyProfileFilter(bmp, targetDisplay);
+                    bool hdrBypass = GetHdrBypass(iniFile);
+                    bool anyHdrBypassed = false;
+                    string displayLink = targetDisplay != null ? targetDisplay.displayLink : (targetScreen != null ? targetScreen.DeviceName : null);
+
+                    if (target == 2)
+                    {
+                        // 전체 화면(VirtualScreen) 캡처 시 모니터별 영역에 맞는 프로필 필터와 HDR 우회를 각각 독립 적용
+                        Rectangle fullRect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+                        foreach (Screen scr in Screen.AllScreens)
+                        {
+                            Rectangle screenRegion = new Rectangle(
+                                scr.Bounds.X - bounds.X,
+                                scr.Bounds.Y - bounds.Y,
+                                scr.Bounds.Width,
+                                scr.Bounds.Height);
+                            Rectangle clipRegion = Rectangle.Intersect(fullRect, screenRegion);
+                            if (clipRegion.Width <= 0 || clipRegion.Height <= 0) continue;
+
+                            Display.DisplayInfo scrDisplay = null;
+                            if (displays != null)
+                            {
+                                foreach (var d in displays)
+                                {
+                                    if (d != null && string.Equals(d.displayLink, scr.DeviceName, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        scrDisplay = d;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (scrDisplay == null) scrDisplay = targetDisplay;
+
+                            bool scrHdr = HdrService.IsHdrEnabled(scr.DeviceName);
+                            if (!scrHdr || !hdrBypass)
+                            {
+                                ApplyProfileFilter(bmp, scrDisplay, clipRegion);
+                            }
+                            else
+                            {
+                                anyHdrBypassed = true;
+                                Logger.Info($"[Screenshot] HDR monitor detected ({scr.DeviceName}). Bypassed double-gamma filter for region.");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // 단일 모니터 캡처: HDR 모니터 화이트아웃 방지 (이중 감마 적용 차단)
+                        bool isHdr = HdrService.IsHdrEnabled(displayLink);
+                        if (!isHdr || !hdrBypass)
+                        {
+                            ApplyProfileFilter(bmp, targetDisplay);
+                        }
+                        else
+                        {
+                            anyHdrBypassed = true;
+                            Logger.Info($"[Screenshot] HDR monitor detected ({displayLink}). Bypassed double-gamma filter to prevent whiteout.");
+                        }
+                    }
 
                     bool useClipboard = GetClipboard(iniFile);
                     bool saveFile = GetSaveFile(iniFile);
@@ -258,8 +328,9 @@ namespace Gamma_Manager
                     {
                         try
                         {
-                            string msg = LanguageManager.Korean ? "📸 스크린샷 캡처 완료" : "📸 Screenshot Captured";
-                            string displayLink = targetDisplay != null ? targetDisplay.displayLink : (targetScreen != null ? targetScreen.DeviceName : null);
+                            string msg = anyHdrBypassed
+                                ? (LanguageManager.Korean ? "📸 스크린샷 캡처 완료 (HDR 최적화)" : "📸 Screenshot Captured (HDR)")
+                                : (LanguageManager.Korean ? "📸 스크린샷 캡처 완료" : "📸 Screenshot Captured");
                             OSDForm.ShowMessage(displayLink, msg);
                         }
                         catch (Exception ex)
@@ -316,30 +387,70 @@ namespace Gamma_Manager
         private static void SetClipboardImageSafe(Bitmap bmp)
         {
             if (bmp == null) return;
-            Thread staThread = new Thread(() =>
+
+            // 이미 STA 스레드(메인 UI 스레드 등)인 경우 별도 스레드 생성 없이 안전하게 복사
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
             {
                 try
                 {
-                    // using 블록 밖에서 bmp가 Dispose되어도 안전하도록 독립된 클론 비트맵 생성 및 copy: true 설정
                     using (Bitmap copyBmp = new Bitmap(bmp))
                     {
                         for (int i = 0; i < 3; i++)
                         {
                             try
                             {
-                                Clipboard.SetDataObject(copyBmp, true, 5, 100);
+                                Clipboard.SetDataObject(copyBmp, true, 3, 50);
                                 break;
                             }
                             catch (ExternalException)
                             {
-                                Thread.Sleep(50);
+                                Thread.Sleep(40);
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn("Clipboard.SetDataObject failed on STA thread: " + ex.Message);
+                    Logger.Warn("Clipboard.SetDataObject failed on current STA thread: " + ex.Message);
+                }
+                return;
+            }
+
+            // 비-STA 스레드에서 호출된 경우, 호출 스레드에서 먼저 독립 클론을 생성한 뒤 STA 스레드로 소유권 이전 (GDI+ 동시 접근 원천 차단)
+            Bitmap ownedCopy = null;
+            try
+            {
+                ownedCopy = new Bitmap(bmp);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Failed to clone bitmap for STA clipboard thread: " + ex.Message);
+                return;
+            }
+
+            Thread staThread = new Thread(() =>
+            {
+                using (ownedCopy)
+                {
+                    try
+                    {
+                        for (int i = 0; i < 3; i++)
+                        {
+                            try
+                            {
+                                Clipboard.SetDataObject(ownedCopy, true, 3, 50);
+                                break;
+                            }
+                            catch (ExternalException)
+                            {
+                                Thread.Sleep(40);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn("Clipboard.SetDataObject failed on STA thread: " + ex.Message);
+                    }
                 }
             });
             staThread.SetApartmentState(ApartmentState.STA);
@@ -347,7 +458,7 @@ namespace Gamma_Manager
             staThread.Join(1000);
         }
 
-        private static void ApplyProfileFilter(Bitmap bmp, Display.DisplayInfo display)
+        private static void ApplyProfileFilter(Bitmap bmp, Display.DisplayInfo display, Rectangle? targetRegion = null)
         {
             float rGamma = display != null ? display.rGamma : 1.0f;
             float gGamma = display != null ? display.gGamma : 1.0f;
@@ -363,10 +474,18 @@ namespace Gamma_Manager
 
             int sb = display != null ? display.shadowBoost : 0;
             int sbm = display != null ? display.shadowBoostMode : 0;
+            int sbt = display != null ? display.shadowBoostTint : 0;
             int hg = display != null ? display.highlightGuard : 0;
             int peak = (display != null && display.shadowBoostCustomPeak > 0) ? display.shadowBoostCustomPeak : 25;
             int width = (display != null && display.shadowBoostCustomWidth > 0) ? display.shadowBoostCustomWidth : 3;
             int saturation = display != null ? display.saturation : 100;
+
+            // 실제 하드웨어 SetDeviceGammaRamp에 적용되는 것과 동일한 정규화 및 안전 범위 클램핑이 반영된 램프 테이블 사용
+            ushort[,] ramp = Gamma.CreateGammaRamp(
+                rGamma, gGamma, bGamma,
+                rContrast, gContrast, bContrast,
+                rBright, gBright, bBright,
+                sb, sbm, sbt, hg, peak, width);
 
             byte[] lutR = new byte[256];
             byte[] lutG = new byte[256];
@@ -374,34 +493,35 @@ namespace Gamma_Manager
 
             for (int i = 0; i < 256; i++)
             {
-                double inVal = (double)i / 255.0;
-                double outR = Gamma.ApplyChannelCurve(inVal, rGamma, rContrast, rBright, sb, sbm, 1.0, hg, peak, width);
-                double outG = Gamma.ApplyChannelCurve(inVal, gGamma, gContrast, gBright, sb, sbm, 1.0, hg, peak, width);
-                double outB = Gamma.ApplyChannelCurve(inVal, bGamma, bContrast, bBright, sb, sbm, 1.0, hg, peak, width);
-
-                lutR[i] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(outR * 255.0)));
-                lutG[i] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(outG * 255.0)));
-                lutB[i] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(outB * 255.0)));
+                lutR[i] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(ramp[0, i] / 257.0)));
+                lutG[i] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(ramp[1, i] / 257.0)));
+                lutB[i] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(ramp[2, i] / 257.0)));
             }
 
-            BitmapData bData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
+            Rectangle fullRect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+            Rectangle region = targetRegion.HasValue ? Rectangle.Intersect(fullRect, targetRegion.Value) : fullRect;
+            if (region.Width <= 0 || region.Height <= 0) return;
+
+            BitmapData bData = bmp.LockBits(fullRect, ImageLockMode.ReadWrite, PixelFormat.Format32bppRgb);
             try
             {
                 float satFactor = (float)saturation / 100.0f;
                 bool applySat = Math.Abs(satFactor - 1.0f) > 0.001f;
 
-                int height = bmp.Height;
-                int widthVal = bmp.Width;
+                int startX = region.X;
+                int endX = region.Right;
+                int startY = region.Y;
+                int endY = region.Bottom;
                 int stride = bData.Stride;
 
                 unsafe
                 {
-                    byte* scan0 = (byte*)bData.Scan0.ToPointer();
+                    IntPtr scan0Ptr = bData.Scan0;
 
-                    for (int y = 0; y < height; y++)
+                    System.Threading.Tasks.Parallel.For(startY, endY, y =>
                     {
-                        byte* row = scan0 + (y * stride);
-                        for (int x = 0; x < widthVal; x++)
+                        byte* row = (byte*)scan0Ptr.ToPointer() + (y * stride);
+                        for (int x = startX; x < endX; x++)
                         {
                             int idx = x * 4;
                             byte b = lutB[row[idx]];
@@ -426,7 +546,7 @@ namespace Gamma_Manager
                                 row[idx + 2] = r;
                             }
                         }
-                    }
+                    });
                 }
             }
             finally

@@ -1,19 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace Gamma_Manager
 {
     internal sealed class VolumeDuckSettingsForm : Form
     {
-        [DllImport("user32.dll")]
-        private static extern short GetAsyncKeyState(int vKey);
-
-        private const int VK_LWIN = 0x5B;
-        private const int VK_RWIN = 0x5C;
-
         private readonly IniFile ini;
         private readonly bool ko;
 
@@ -46,6 +39,7 @@ namespace Gamma_Manager
         private Keys currentKey = Keys.None;
         private GlobalHotkey.Modifiers currentModifiers = GlobalHotkey.Modifiers.None;
         private bool isCapturing = false;
+        private bool _winKeyHeld = false;
 
         private sealed class Item
         {
@@ -59,6 +53,18 @@ namespace Gamma_Manager
         {
             ini = iniFile;
             ko = LanguageManager.Korean;
+
+            Deactivate += (s, e) =>
+            {
+                _winKeyHeld = false;
+                if (isCapturing)
+                {
+                    isCapturing = false;
+                    UpdateButtonText();
+                    lblStatus.Text = ko ? "💡 Ctrl, Alt, Shift, Win 키와 조합 가능 (ESC: 해제)" : "💡 Combinable with Ctrl, Alt, Shift, Win (ESC: Cancel)";
+                }
+            };
+
             Text = ko ? "즉시 볼륨 전환 설정" : "Quick Volume Switch Settings";
             Width = 530;
             Height = 635;
@@ -67,7 +73,6 @@ namespace Gamma_Manager
             MaximizeBox = false;
             MinimizeBox = false;
             KeyPreview = true;
-            KeyDown += VolumeDuckSettingsForm_KeyDown;
 
             BuildUI();
             LoadSettings();
@@ -208,10 +213,12 @@ namespace Gamma_Manager
 
             lblStatus = new Label
             {
+                Text = ko ? "💡 Ctrl, Alt, Shift, Win 키와 조합 가능 (ESC: 해제)" : "💡 Combinable with Ctrl, Alt, Shift, Win (ESC: Cancel)",
                 Location = new Point(135, 230),
-                Size = new Size(340, 20),
-                Font = new Font("Segoe UI", 8.5f),
-                ForeColor = Color.DarkOrange
+                Size = new Size(350, 20),
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                Tag = "Highlight",
+                ForeColor = ThemeManager.AccentText
             };
             Controls.Add(lblStatus);
 
@@ -589,51 +596,61 @@ namespace Gamma_Manager
         private void BeginCapture()
         {
             isCapturing = true;
-            btnHotkey.Text = ko ? "키 입력 대기..." : "Waiting for key...";
-            lblStatus.Text = ko ? "원하는 키 조합을 누르세요. ESC = 취소" : "Press a key combination. ESC = cancel";
+            _winKeyHeld = false;
+            btnHotkey.Text = ko ? "키 입력 대기 중..." : "Waiting for key...";
+            btnHotkey.ForeColor = Color.Red;
+            lblStatus.Text = ko ? "원하는 키를 누르세요. (Ctrl/Alt/Shift/Win 조합 가능, ESC: 취소)" : "Press key combination. (Ctrl/Alt/Shift/Win combinable, ESC: Cancel)";
             KeyPreview = true;
             ActiveControl = null;
             Focus();
         }
 
-        private void ClearHotkey()
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            isCapturing = false;
-            currentKey = Keys.None;
-            currentModifiers = GlobalHotkey.Modifiers.None;
-            UpdateButtonText();
-            lblStatus.Text = ko ? "단축키가 해제되었습니다." : "Hotkey cleared.";
+            if (isCapturing)
+            {
+                if (GlobalHotkey.TryExtractHotkeyFromCmdKey(ref msg, keyData, ref _winKeyHeld, out Keys keyCode, out GlobalHotkey.Modifiers mods))
+                {
+                    ApplyCapturedHotkey(keyCode, mods);
+                }
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        private void VolumeDuckSettingsForm_KeyDown(object sender, KeyEventArgs e)
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.LWin || e.KeyCode == Keys.RWin)
+            {
+                _winKeyHeld = false;
+            }
+            else if (isCapturing && (e.KeyCode == Keys.PrintScreen || e.KeyCode == Keys.Pause))
+            {
+                GlobalHotkey.Modifiers mods = GlobalHotkey.GetModifiersFromKeyData(e.KeyData, _winKeyHeld);
+                _winKeyHeld = false;
+                ApplyCapturedHotkey(e.KeyCode, mods);
+                e.Handled = true;
+                return;
+            }
+
+            base.OnKeyUp(e);
+        }
+
+        private void ApplyCapturedHotkey(Keys keyCode, GlobalHotkey.Modifiers mods)
         {
             if (!isCapturing) return;
+            isCapturing = false;
+            _winKeyHeld = false;
 
-            if (e.KeyCode == Keys.ControlKey || e.KeyCode == Keys.Menu || e.KeyCode == Keys.ShiftKey || e.KeyCode == Keys.LWin || e.KeyCode == Keys.RWin)
+            if (keyCode == Keys.Escape)
             {
-                e.SuppressKeyPress = true;
-                return;
-            }
-
-            if (e.KeyCode == Keys.Escape)
-            {
-                isCapturing = false;
                 UpdateButtonText();
-                lblStatus.Text = "";
-                e.SuppressKeyPress = true;
+                lblStatus.Text = ko ? "💡 Ctrl, Alt, Shift, Win 키와 조합 가능 (ESC: 해제)" : "💡 Combinable with Ctrl, Alt, Shift, Win (ESC: Cancel)";
                 return;
             }
 
-            GlobalHotkey.Modifiers mods = GlobalHotkey.Modifiers.None;
-            if (e.Control) mods |= GlobalHotkey.Modifiers.Control;
-            if (e.Alt) mods |= GlobalHotkey.Modifiers.Alt;
-            if (e.Shift) mods |= GlobalHotkey.Modifiers.Shift;
-
-            bool lWin = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0;
-            bool rWin = (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
-            if (lWin || rWin) mods |= GlobalHotkey.Modifiers.Win;
-
-            // 프로필 및 특수 핫키와의 중복 검사
+            // 1. 프로필 및 특수 핫키와의 중복 검사
             string[] hotkeyNames = ini.GetKeys("Hotkeys");
             string conflictName = null;
             if (hotkeyNames != null)
@@ -643,28 +660,18 @@ namespace Gamma_Manager
                     string registeredHk = ini.Read(hkName, "Hotkeys");
                     if (TryParseHotkey(registeredHk, out Keys rKey, out GlobalHotkey.Modifiers rMods))
                     {
-                        if (rKey == e.KeyCode && rMods == mods)
+                        if (rKey == keyCode && rMods == mods)
                         {
                             if (hkName == HotkeySettingsForm.HARD_RESET_ALL_PRESET)
-                            {
                                 conflictName = ko ? "전체 초기화" : "Reset All";
-                            }
                             else if (hkName.StartsWith(HotkeySettingsForm.HARD_RESET_SINGLE_PREFIX, StringComparison.OrdinalIgnoreCase))
-                            {
                                 conflictName = ko ? "모니터 초기화" : "Reset Monitor";
-                            }
                             else if (hkName.StartsWith(HotkeySettingsForm.CYCLE_SINGLE_PREFIX, StringComparison.OrdinalIgnoreCase))
-                            {
                                 conflictName = ko ? "프로필 순환" : "Cycle Profiles";
-                            }
                             else if (hkName == HotkeySettingsForm.SCREENSHOT_PRESET)
-                            {
                                 conflictName = ko ? "화면 필터 스크린샷" : "Filtered Screenshot";
-                            }
                             else
-                            {
                                 conflictName = hkName;
-                            }
                             break;
                         }
                     }
@@ -677,7 +684,7 @@ namespace Gamma_Manager
                 string scHkText = ScreenshotManager.GetHotkey(ini);
                 if (TryParseHotkey(scHkText, out Keys scKey, out GlobalHotkey.Modifiers scMod))
                 {
-                    if (scKey == e.KeyCode && scMod == mods)
+                    if (scKey == keyCode && scMod == mods)
                     {
                         conflictName = ko ? "화면 필터 스크린샷" : "Filtered Screenshot";
                     }
@@ -693,57 +700,62 @@ namespace Gamma_Manager
                     ko ? "핫키 중복" : "Duplicate Hotkey",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
-                e.SuppressKeyPress = true;
+                UpdateButtonText();
                 return;
             }
 
-            currentKey = e.KeyCode;
+            // 2. 외부 백그라운드 프로그램(AMD Software, 지포스 익스피리언스, 스팀, 디스코드 등) 선점 여부 사전 검사
+            if (!GlobalHotkey.IsHotkeyAvailableInOS(this.Handle, keyCode, mods, out int win32Error))
+            {
+                string hkText = FormatHotkey(keyCode, mods);
+                string warnMsg = ko
+                    ? $"[안내] 단축키 [{hkText}]는 다른 백그라운드 프로그램(AMD Software, 지포스 섀도우플레이, 디스코드, 스팀 등)에서 이미 전역 단축키로 선점 중인 것으로 감지되었습니다.\r\n\r\n이대로 등록하면 해당 프로그램과 겹치거나 핫키가 정상 동작하지 않을 수 있습니다.\r\n그래도 이 단축키로 진행하시겠습니까?"
+                    : $"[Notice] Hotkey [{hkText}] appears to be already in use by another application (AMD Software, GeForce ShadowPlay, Discord, Steam, etc.).\r\n\r\nDo you still wish to proceed with this hotkey?";
+
+                DialogResult dr = MessageBox.Show(
+                    warnMsg,
+                    ko ? "단축키 선점 감지" : "Hotkey Conflict Detected",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (dr != DialogResult.Yes)
+                {
+                    UpdateButtonText();
+                    return;
+                }
+            }
+
+            currentKey = keyCode;
             currentModifiers = mods;
-            isCapturing = false;
 
             UpdateButtonText();
-            lblStatus.Text = "";
-            e.SuppressKeyPress = true;
+            lblStatus.Text = ko ? "단축키가 설정되었습니다. (저장을 눌러 적용)" : "Hotkey assigned. (Click Save to apply)";
+        }
+
+        private void ClearHotkey()
+        {
+            isCapturing = false;
+            _winKeyHeld = false;
+            currentKey = Keys.None;
+            currentModifiers = GlobalHotkey.Modifiers.None;
+            UpdateButtonText();
+            lblStatus.Text = ko ? "단축키가 해제되었습니다." : "Hotkey cleared.";
         }
 
         private void UpdateButtonText()
         {
             btnHotkey.Text = FormatHotkey(currentKey, currentModifiers);
+            btnHotkey.ForeColor = ThemeManager.IsDark ? ThemeManager.DarkText : ThemeManager.LightText;
         }
 
         private static string FormatHotkey(Keys key, GlobalHotkey.Modifiers modifiers)
         {
-            if (key == Keys.None) return LanguageManager.Korean ? "없음 (지정)" : "None (Set)";
-            string text = "";
-            if ((modifiers & GlobalHotkey.Modifiers.Control) != 0) text += "Ctrl + ";
-            if ((modifiers & GlobalHotkey.Modifiers.Alt) != 0) text += "Alt + ";
-            if ((modifiers & GlobalHotkey.Modifiers.Shift) != 0) text += "Shift + ";
-            if ((modifiers & GlobalHotkey.Modifiers.Win) != 0) text += "Win + ";
-            return text + key.ToString();
+            return GlobalHotkey.FormatHotkey(key, modifiers);
         }
 
         private static bool TryParseHotkey(string value, out Keys key, out GlobalHotkey.Modifiers modifiers)
         {
-            key = Keys.None;
-            modifiers = GlobalHotkey.Modifiers.None;
-            if (string.IsNullOrWhiteSpace(value)) return false;
-
-            string[] parts = value.Split('+');
-            string keyText = parts[parts.Length - 1].Trim();
-            if (!Enum.TryParse(keyText, true, out key) || key == Keys.None) return false;
-
-            for (int i = 0; i < parts.Length - 1; i++)
-            {
-                switch (parts[i].Trim().ToLowerInvariant())
-                {
-                    case "ctrl": case "control": modifiers |= GlobalHotkey.Modifiers.Control; break;
-                    case "alt": modifiers |= GlobalHotkey.Modifiers.Alt; break;
-                    case "shift": modifiers |= GlobalHotkey.Modifiers.Shift; break;
-                    case "win": case "windows": modifiers |= GlobalHotkey.Modifiers.Win; break;
-                    default: return false;
-                }
-            }
-            return true;
+            return GlobalHotkey.TryParseHotkey(value, out key, out modifiers);
         }
 
         private void SaveSettings()

@@ -151,13 +151,19 @@ namespace Gamma_Manager
                             int current, def, min, max, step;
                             if (GetNvidia(b, out current, out def, out min, out max, out step))
                             {
-                                lock (_globalInitLock) { bindings[linkKey] = b; }
-                                SetDisplayRange(display, current, def, min, max, step);
                                 lock (_globalInitLock)
                                 {
-                                    if (!originalValues.ContainsKey(linkKey))
+                                    bindings[linkKey] = b;
+                                    if (!originalValues.TryGetValue(linkKey, out int savedOrig))
+                                    {
                                         originalValues[linkKey] = current;
+                                    }
+                                    else
+                                    {
+                                        def = savedOrig;
+                                    }
                                 }
+                                SetDisplayRange(display, current, def, min, max, step);
                                 return true;
                             }
                         }
@@ -169,13 +175,19 @@ namespace Gamma_Manager
                             int current, def, min, max, step;
                             if (GetAmd(b, out current, out def, out min, out max, out step))
                             {
-                                lock (_globalInitLock) { bindings[linkKey] = b; }
-                                SetDisplayRange(display, current, def, min, max, step);
                                 lock (_globalInitLock)
                                 {
-                                    if (!originalValues.ContainsKey(linkKey))
+                                    bindings[linkKey] = b;
+                                    if (!originalValues.TryGetValue(linkKey, out int savedOrig))
+                                    {
                                         originalValues[linkKey] = current;
+                                    }
+                                    else
+                                    {
+                                        def = savedOrig;
+                                    }
                                 }
+                                SetDisplayRange(display, current, def, min, max, step);
                                 return true;
                             }
                         }
@@ -655,8 +667,9 @@ namespace Gamma_Manager
         {
             lock (_globalInitLock)
             {
+                // 디스플레이 재탐색(해상도/모니터 변경) 시에도 시작 시점의 원본 채도(originalValues)는 보존하여
+                // 프로그램 종료 시 변조된 채도가 아닌 최초 원본 채도로 복원되도록 유지한다.
                 bindings.Clear();
-                originalValues.Clear();
                 usedAmdTargets.Clear();
                 _adapterLocks.Clear();
             }

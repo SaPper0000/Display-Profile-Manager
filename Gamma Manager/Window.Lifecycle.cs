@@ -115,6 +115,11 @@ namespace Gamma_Manager
                                     if (fresh.saturationSupported)
                                     {
                                         fresh.saturation = Clamp(matchedOld.saturation, fresh.saturationMin, fresh.saturationMax);
+                                        fresh.saturationDefault = Clamp(matchedOld.saturationDefault, fresh.saturationMin, fresh.saturationMax);
+                                        if (StartupStateManager.TryGetOriginalSaturation(fresh.displayLink, out int origSat, freshKey))
+                                        {
+                                            Saturation.SetOriginalValue(fresh.displayLink, origSat);
+                                        }
                                     }
 
                                     fresh.shadowBoost = matchedOld.shadowBoost;
@@ -239,6 +244,8 @@ namespace Gamma_Manager
         private void Window_FormClosed(object sender, FormClosedEventArgs e)
         {
             isClosing = true;
+            if (MainInstance == this)
+                MainInstance = null;
 
             // 1. 디스플레이 변경 감지 태스크 및 핸들러 취소
             _displayChangeCts?.Cancel();
@@ -253,9 +260,20 @@ namespace Gamma_Manager
 
             displayService?.InvalidateAllGenerations();
 
-            // 2. 트레이 아이콘 해제
+            // 2. 트레이 아이콘 및 메뉴 아이템 해제
             try
             {
+                if (contextMenu != null)
+                {
+                    while (contextMenu.Items.Count > 0)
+                    {
+                        ToolStripItem item = contextMenu.Items[0];
+                        contextMenu.Items.RemoveAt(0);
+                        try { item?.Dispose(); } catch { }
+                    }
+                }
+                toolMonitors.Clear();
+
                 if (notifyIcon != null)
                 {
                     notifyIcon.Visible = false;
@@ -349,7 +367,15 @@ namespace Gamma_Manager
                 Logger.Error("Error during form closed cleanup.", ex);
             }
 
-            // 8. 캐시된 GDI 폰트 해제
+            // 8. 캐시된 GDI 폰트, 커스텀 이미지 및 툴팁 해제
+            if (pictureBox1 != null && string.Equals(pictureBox1.Tag as string, "Custom", StringComparison.Ordinal))
+            {
+                try { pictureBox1.BackgroundImage?.Dispose(); } catch { }
+                pictureBox1.BackgroundImage = null;
+                pictureBox1.Tag = null;
+            }
+            topMostToolTip?.Dispose();
+            topMostToolTip = null;
             _cachedRegularFont?.Dispose();
             _cachedRegularFont = null;
             _cachedBoldFont?.Dispose();

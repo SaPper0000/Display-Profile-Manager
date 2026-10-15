@@ -13,6 +13,9 @@ namespace Gamma_Manager
         public static readonly Color DarkBorder = Color.FromArgb(65, 70, 80);
         public static readonly Color DarkText = Color.FromArgb(235, 238, 242);
         public static readonly Color DarkMuted = Color.FromArgb(160, 166, 176);
+        public static readonly Color GoldAccent = Color.FromArgb(255, 204, 0); // 선명한 골드/노란색 강조
+        public static readonly Color LightGoldAccent = Color.FromArgb(215, 105, 0); // 라이트 모드용 딥 오렌지/앰버
+        public static Color AccentText => IsDark ? GoldAccent : LightGoldAccent;
 
         public static readonly Color LightBack = Color.FromArgb(242, 244, 247);
         public static readonly Color LightPanel = Color.White;
@@ -58,7 +61,14 @@ namespace Gamma_Manager
                 else if (c is Label)
                 {
                     c.BackColor = Color.Transparent;
-                    c.ForeColor = text;
+                    if (c.Tag as string == "Highlight")
+                    {
+                        c.ForeColor = AccentText;
+                    }
+                    else
+                    {
+                        c.ForeColor = text;
+                    }
                 }
                 else if (c is NumericUpDown)
                 {

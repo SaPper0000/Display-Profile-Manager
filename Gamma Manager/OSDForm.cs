@@ -98,20 +98,31 @@ namespace Gamma_Manager
             }
         }
 
+        private static Form GetMainSyncForm()
+        {
+            Form mainForm = Window.MainInstance;
+            if (mainForm != null) return mainForm;
+
+            try
+            {
+                if (Application.OpenForms.Count > 0)
+                    return Application.OpenForms[0];
+            }
+            catch { }
+            return null;
+        }
+
         public static void ShowMessage(string displayLink, string message, bool persistent = false)
         {
             try
             {
-                if (Application.OpenForms.Count > 0)
+                Form mainForm = GetMainSyncForm();
+                if (mainForm != null && !mainForm.IsDisposed && mainForm.IsHandleCreated)
                 {
-                    Form mainForm = Application.OpenForms[0];
-                    if (mainForm != null && !mainForm.IsDisposed && mainForm.IsHandleCreated)
+                    if (mainForm.InvokeRequired)
                     {
-                        if (mainForm.InvokeRequired)
-                        {
-                            mainForm.BeginInvoke(new Action(() => ShowMessage(displayLink, message, persistent)));
-                            return;
-                        }
+                        mainForm.BeginInvoke(new Action(() => ShowMessage(displayLink, message, persistent)));
+                        return;
                     }
                 }
 
@@ -127,16 +138,13 @@ namespace Gamma_Manager
         {
             try
             {
-                if (Application.OpenForms.Count > 0)
+                Form mainForm = GetMainSyncForm();
+                if (mainForm != null && !mainForm.IsDisposed && mainForm.IsHandleCreated)
                 {
-                    Form mainForm = Application.OpenForms[0];
-                    if (mainForm != null && !mainForm.IsDisposed && mainForm.IsHandleCreated)
+                    if (mainForm.InvokeRequired)
                     {
-                        if (mainForm.InvokeRequired)
-                        {
-                            mainForm.BeginInvoke(new Action(HideOSD));
-                            return;
-                        }
+                        mainForm.BeginInvoke(new Action(HideOSD));
+                        return;
                     }
                 }
 
